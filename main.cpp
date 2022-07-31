@@ -48,14 +48,6 @@ enum address_mode
 };
 
 
-enum extra_cycles_case
-{
-  no_extra_cycles = 0,
-  one_extra_cycle_if_page_boundary_crossed = 1,
-  extra_cycles_if_branch_taken = 2
-};
-
-
 int calculate_extra_cycles(std::uint8_t opcode, bool page_boundary_crossed, bool branch_taken)
 {
   int result = 0;
@@ -113,35 +105,6 @@ int calculate_extra_cycles(std::uint8_t opcode, bool page_boundary_crossed, bool
         result += page_boundary_crossed;
       }
 
-      break;
-    }
-  }
-
-  return result;
-}
-
-
-int calculate_extra_cycles(extra_cycles_case c, bool page_boundary_crossed, bool branch_taken)
-{
-  int result = 0;
-
-  switch(c)
-  {
-    case no_extra_cycles:
-    {
-      result = 0;
-      break;
-    }
-
-    case one_extra_cycle_if_page_boundary_crossed:
-    {
-      result = 1;
-      break;
-    }
-
-    case extra_cycles_if_branch_taken:
-    {
-      result = branch_taken + page_boundary_crossed;
       break;
     }
   }
