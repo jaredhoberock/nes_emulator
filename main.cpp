@@ -11,18 +11,196 @@
 #include <tuple>
 #include <vector>
 
+
+class nrom
+{
+  private:
+    int num_prg_banks_;
+
+  public:
+    nrom(int num_prg_banks)
+      : num_prg_banks_{num_prg_banks}
+    {}
+
+    std::uint16_t map(std::uint16_t address) const
+    {
+      std::uint16_t result = 0;
+
+      if(address >= 0x8000)
+      {
+        // map incoming address 0x8000 to the first byte of PRG memory
+        result = address - 0x8000;
+
+        if(num_prg_banks_ == 1)
+        {
+          // this mask does mirroring a single bank
+          result &= 0x3FFF;
+        }
+      }
+      else
+      {
+        throw std::runtime_error("nrom::map: Bad address");
+      }
+
+      return result;
+    }
+};
+
+
+class cartridge
+{
+  private:
+    int num_chr_banks_;
+    int num_prg_banks_;
+
+    std::vector<std::uint8_t> chr_memory_;
+    std::vector<std::uint8_t> prg_memory_;
+
+    nrom mapper_;
+
+  public:
+    cartridge(const std::string& filename)
+      : mapper_{-1}
+    {
+      std::ifstream is{filename.c_str(), std::ios::binary}; 
+      if(not is.is_open()) throw std::runtime_error("Couldn't open file");
+
+      // see https://www.nesdev.org/wiki/INES#iNES_file_format
+      struct
+      {
+        char name[4];
+        std::uint8_t num_prg_rom_chunks;
+        std::uint8_t num_chr_rom_chunks;
+        std::uint8_t flags_6;
+        std::uint8_t flags_7;
+        std::uint8_t flags_8;
+        std::uint8_t flags_9;
+        std::uint8_t flags_10;
+        char unused[5];
+      } header;
+
+      // read in header
+      is.read(reinterpret_cast<char*>(&header), sizeof(header));
+
+      // if a 512B trainer is present, ignore it
+      if(header.flags_6 & 0x04)
+      {
+        is.seekg(512, std::ios_base::cur);
+      }
+
+      // decode mapper id
+      std::uint8_t mapper_id = (header.flags_7 & 0xF0) | (header.flags_6 >> 4);
+      if(mapper_id != 0)
+      {
+        throw std::runtime_error(std::string("Unknown mapper: ") + std::to_string(mapper_id));
+      }
+
+      // read in PRG data
+      num_prg_banks_ = header.num_prg_rom_chunks;
+      prg_memory_.resize(num_prg_banks_ * 16384);
+      is.read(reinterpret_cast<char*>(prg_memory_.data()), prg_memory_.size());
+
+      // read in CHR data
+      num_chr_banks_ = header.num_chr_rom_chunks;
+      chr_memory_.resize(num_chr_banks_ * 8192);
+      is.read(reinterpret_cast<char*>(chr_memory_.data()), chr_memory_.size());
+
+      is.close();
+
+      mapper_ = nrom{num_prg_banks_};
+    }
+
+    std::uint8_t read(std::uint16_t address) const
+    {
+      return prg_memory_[mapper_.map(address)];
+    }
+
+    void write(std::uint16_t address, std::uint8_t value)
+    {
+      // XXX this hack allows us to override the reset vector while debugging
+      if(address == 0xFFFC or address == 0xFFFD)
+      {
+        prg_memory_[mapper_.map(address)] = value;
+      }
+      else
+      {
+        throw std::runtime_error("cartridge::write: Bad address");
+      }
+    }
+};
+
+
 struct my_bus
 {
-  std::uint8_t* ptr;
+  std::array<uint8_t, 0x800> internal_ram;
+  cartridge cart;
 
   std::uint8_t read(std::uint16_t address) const
   {
-    return ptr[address];
+    std::uint8_t result = 0;
+
+    if(0x0000 <= address and address < 0x2000)
+    {
+      // this bitwise and implements mirroring
+      result = internal_ram[address & 0x07FF];
+    }
+    else if(0x2000 <= address and address < 0x4000)
+    {
+      // ppu here, mirrored every 8 bytes
+    }
+    else if(0x4000 <= address and address < 0x4018)
+    {
+      // apu and i/o
+      // XXX force this result to be 0xFF to match nestest while debugging
+      result = 0xFF;
+    }
+    else if(0x4018 <= address and address < 0x4020)
+    {
+      // apu and i/o functionality that is normally disabled
+      // XXX force this result to be 0xFF to match nestest while debugging
+      result = 0xFF;
+    }
+    else if(0x4020 <= address)
+    {
+      // cartridge
+      result = cart.read(address);
+    }
+    else
+    {
+      throw std::runtime_error("my_bus::read: Bad address");
+    }
+
+    return result;
   }
 
   void write(std::uint16_t address, std::uint8_t value)
   {
-    ptr[address] = value;
+    if(0x0000 <= address and address < 0x2000)
+    {
+      // this bitwise and implements mirroring
+      internal_ram[address & 0x07FF] = value;
+    }
+    else if(0x2000 <= address and address < 0x4000)
+    {
+      // ppu here, mirrored every 8 bytes
+    }
+    else if(0x4000 <= address and address < 0x4018)
+    {
+      // apu and i/o
+    }
+    else if(0x4018 <= address and address < 0x4020)
+    {
+      // apu and i/o functionality that is normally disabled
+    }
+    else if(0x4020 <= address)
+    {
+      // cartridge
+      cart.write(address, value);
+    }
+    else
+    {
+      throw std::runtime_error("my_bus::write: Bad address");
+    }
   }
 };
 
@@ -1905,6 +2083,12 @@ struct my_6502
         break;
       }
 
+      case BRK:
+      {
+        execute_break();
+        break;
+      }
+
       case BVC:
       {
         branch_taken = execute_branch_if_overflow_clear(address);
@@ -2326,27 +2510,12 @@ struct my_6502
 
 int main()
 {
-  std::ifstream is{"nestest.nes", std::ios::binary}; 
-
-  std::vector<char> program_text{std::istreambuf_iterator<char>{is}, std::istreambuf_iterator<char>{}};
-
-  // XXX for now, just choose some size large enough to accomodate two copies of the program at the addresses below
-  std::vector<std::uint8_t> memory(128 * 1024, 0);
-
-  // load two copies of the program text into memory
-  std::copy(program_text.begin() + 0x0010, program_text.end(), memory.begin() + 0x8000);
-  std::copy(program_text.begin() + 0x0010, program_text.end(), memory.begin() + 0xC000);
-
-  // initialize the reset vector location
-  memory[my_6502::reset_vector_location]     = 0x00;
-  memory[my_6502::reset_vector_location + 1] = 0xC0;
-
-  // for now, just initialize APU memory locations to 0xFF
-  std::fill_n(memory.begin() + 0x4000, 0x18, 0xFF);
-  std::fill_n(memory.begin() + 0x4018, 0x08, 0xFF);
-
   // create a bus
-  my_bus bus{memory.data()};
+  my_bus bus{{}, cartridge{"nestest.nes"}};
+
+  // initialize the reset vector location for headless nestest
+  bus.write(my_6502::reset_vector_location, 0x00);
+  bus.write(my_6502::reset_vector_location + 1, 0xC0);
 
   // create a cpu
   my_6502 cpu{bus};
