@@ -52,65 +52,79 @@ class nrom
 class cartridge
 {
   private:
-    int num_chr_banks_;
+    // XXX these values are possibly only relevant to the mapper
     int num_prg_banks_;
+    int num_chr_banks_;
 
-    std::vector<std::uint8_t> chr_memory_;
     std::vector<std::uint8_t> prg_memory_;
+    std::vector<std::uint8_t> chr_memory_;
 
     nrom mapper_;
 
   public:
-    cartridge(const std::string& filename)
-      : mapper_{-1}
+    // see https://www.nesdev.org/wiki/INES#iNES_file_format
+    struct ines_file_header
     {
-      std::ifstream is{filename.c_str(), std::ios::binary}; 
-      if(not is.is_open()) throw std::runtime_error("Couldn't open file");
+      char name[4];
+      std::uint8_t num_prg_rom_chunks;
+      std::uint8_t num_chr_rom_chunks;
+      std::uint8_t flags_6;
+      std::uint8_t flags_7;
+      std::uint8_t flags_8;
+      std::uint8_t flags_9;
+      std::uint8_t flags_10;
+      char unused[5];
 
-      // see https://www.nesdev.org/wiki/INES#iNES_file_format
-      struct
+      ines_file_header(std::istream &is)
       {
-        char name[4];
-        std::uint8_t num_prg_rom_chunks;
-        std::uint8_t num_chr_rom_chunks;
-        std::uint8_t flags_6;
-        std::uint8_t flags_7;
-        std::uint8_t flags_8;
-        std::uint8_t flags_9;
-        std::uint8_t flags_10;
-        char unused[5];
-      } header;
+        is.read(reinterpret_cast<char*>(this), sizeof(ines_file_header));
+      }
 
-      // read in header
-      is.read(reinterpret_cast<char*>(&header), sizeof(header));
+      int mapper_id() const
+      {
+        return (flags_7 & 0xF0) | (flags_6 >> 4);
+      }
 
+      bool trainer_present()
+      {
+        return flags_6 & 0x04;
+      }
+    };
+
+    // XXX ideally, a cartridge is constructed from two arrays (prg & chr data) and a mapper
+    //     so we should create a function whose job is to take a filename and return the tuple (mapper, prg_data, chr_data)
+
+    cartridge(int num_prg_banks, int num_chr_banks, bool trainer_present_in_stream, std::istream& is)
+      : num_prg_banks_{num_prg_banks},
+        num_chr_banks_{num_chr_banks},
+        prg_memory_(num_prg_banks_ * 16384),
+        chr_memory_(num_chr_banks_ * 8192),
+        mapper_{num_prg_banks_}
+    {
       // if a 512B trainer is present, ignore it
-      if(header.flags_6 & 0x04)
+      if(trainer_present_in_stream)
       {
         is.seekg(512, std::ios_base::cur);
       }
 
-      // decode mapper id
-      std::uint8_t mapper_id = (header.flags_7 & 0xF0) | (header.flags_6 >> 4);
-      if(mapper_id != 0)
-      {
-        throw std::runtime_error(std::string("Unknown mapper: ") + std::to_string(mapper_id));
-      }
-
       // read in PRG data
-      num_prg_banks_ = header.num_prg_rom_chunks;
-      prg_memory_.resize(num_prg_banks_ * 16384);
       is.read(reinterpret_cast<char*>(prg_memory_.data()), prg_memory_.size());
 
       // read in CHR data
-      num_chr_banks_ = header.num_chr_rom_chunks;
-      chr_memory_.resize(num_chr_banks_ * 8192);
       is.read(reinterpret_cast<char*>(chr_memory_.data()), chr_memory_.size());
-
-      is.close();
-
-      mapper_ = nrom{num_prg_banks_};
     }
+
+    cartridge(ines_file_header header, std::istream& is)
+      : cartridge{header.num_prg_rom_chunks, header.num_chr_rom_chunks, header.trainer_present(), is}
+    {}
+
+    cartridge(std::istream&& is)
+      : cartridge{ines_file_header{is}, is}
+    {}
+
+    cartridge(const std::string& filename)
+      : cartridge{std::ifstream{filename.c_str(), std::ios::binary}}
+    {}
 
     std::uint8_t read(std::uint16_t address) const
     {
