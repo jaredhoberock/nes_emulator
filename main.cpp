@@ -2,6 +2,8 @@
 #include <array>
 #include <cassert>
 #include <cstdint>
+#include <fmt/format.h>
+#include <fmt/ostream.h>
 #include <fstream>
 #include <functional>
 #include <iostream>
@@ -567,10 +569,7 @@ struct my_6502
     {
       if(instruction_info_table[opcode].mnemonic == 0)
       {
-        std::string what;
-        what.resize(60);
-        snprintf(what.data(), what.size(), "instruction::num_bytes: Unknown opcode %02X", opcode);
-        throw std::runtime_error(what);
+        throw std::runtime_error(fmt::format("instruction::num_bytes: Unknown opcode {:02X}", opcode));
       }
 
       int result = 0;
@@ -797,39 +796,37 @@ struct my_6502
   std::string disassemble(instruction i) const
   {
     std::string arg;
-    arg.resize(20);
 
     auto info = instruction_info_table[i.opcode];
-
     switch(info.mode)
     {
       case accumulator:
       {
-        arg.resize(snprintf(arg.data(), arg.size(), "A"));
+        arg = fmt::format("A");
         break;
       }
 
       case absolute:
       {
-        arg.resize(snprintf(arg.data(), arg.size(), "$%02X%02X", i.byte2, i.byte1));
+        arg = fmt::format("${:02X}{:02X}", i.byte2, i.byte1);
         break;
       }
 
       case absolute_x_indexed:
       {
-        arg.resize(snprintf(arg.data(), arg.size(), "$%02X%02X,X", i.byte2, i.byte1));
+        arg = fmt::format("${:02X}{:02X},X", i.byte2, i.byte1);
         break;
       }
 
       case absolute_y_indexed:
       {
-        arg.resize(snprintf(arg.data(), arg.size(), "$%02X%02X,Y", i.byte2, i.byte1));
+        arg = fmt::format("${:02X}{:02X},Y", i.byte2, i.byte1);
         break;
       }
 
       case immediate:
       {
-        arg.resize(snprintf(arg.data(), arg.size(), "#$%02X", i.byte1));
+        arg = fmt::format("#${:02X}", i.byte1);
         break;
       }
 
@@ -840,44 +837,44 @@ struct my_6502
 
       case indexed_indirect:
       {
-        arg.resize(snprintf(arg.data(), arg.size(), "($%02X,X)", i.byte1));
+        arg = fmt::format("(${:02X},X)", i.byte1);
         break;
       }
 
       case indirect:
       {
-        arg.resize(snprintf(arg.data(), arg.size(), "($%02X%02X)", i.byte2, i.byte1));
+        arg = fmt::format("(${:02X}{:02X})", i.byte2, i.byte1);
         break;
       }
 
       case indirect_indexed:
       {
-        arg.resize(snprintf(arg.data(), arg.size(), "($%02X),Y", i.byte1));
+        arg = fmt::format("(${:02X}),Y", i.byte1);
         break;
       }
 
       case relative:
       {
         std::uint16_t address = calculate_address(program_counter_ + 1, i);
-        arg.resize(snprintf(arg.data(), arg.size(), "$%04X", address));
+        arg = fmt::format("${:04X}", address);
         break;
       }
 
       case zero_page:
       {
-        arg.resize(snprintf(arg.data(), arg.size(), "$%02X", i.byte1));
+        arg = fmt::format("${:02X}", i.byte1);
         break;
       }
 
       case zero_page_x_indexed:
       {
-        arg.resize(snprintf(arg.data(), arg.size(), "$%02X,X", i.byte1));
+        arg = fmt::format("${:02X},X", i.byte1);
         break;
       }
 
       case zero_page_y_indexed:
       {
-        arg.resize(snprintf(arg.data(), arg.size(), "$%02X,Y", i.byte1));
+        arg = fmt::format("${:02X},Y", i.byte1);
         break;
       }
 
@@ -912,7 +909,6 @@ struct my_6502
       case LDX:
       case LDY:
       case LSR:
-      case NOP:
       case ORA:
       case ROL:
       case ROR:
@@ -932,8 +928,6 @@ struct my_6502
           break;
         }
 
-        embellishment.resize(30);
-
         switch(info.mode)
         {
           case absolute_x_indexed:
@@ -941,7 +935,7 @@ struct my_6502
           {
             std::uint16_t address = calculate_address(program_counter_, i);
             std::uint8_t data = read(address);
-            embellishment.resize(snprintf(embellishment.data(), embellishment.size(), " @ %04X = %02X", address, data));
+            embellishment = fmt::format(" @ {:04X} = {:02X}", address, data);
             break;
           }
 
@@ -951,14 +945,14 @@ struct my_6502
             std::uint8_t x_plus_immediate = index_register_x_ + i.byte1;
             std::uint16_t address = calculate_address(program_counter_, i);
             std::uint8_t data = read(address);
-            embellishment.resize(snprintf(embellishment.data(), embellishment.size(), " @ %02X = %04X = %02X", x_plus_immediate, address, data));
+            embellishment = fmt::format(" @ {:02X} = {:04X} = {:02X}", x_plus_immediate, address, data);
             break;
           }
 
           case indirect:
           {
             std::uint16_t address = calculate_address(program_counter_, i);
-            embellishment.resize(snprintf(embellishment.data(), embellishment.size(), " = %04X", address));
+            embellishment = fmt::format(" = {:04X}", address);
             break;
           }
 
@@ -974,7 +968,7 @@ struct my_6502
 
             std::uint16_t address = calculate_address(program_counter_, i);
             std::uint8_t data = read(address);
-            embellishment.resize(snprintf(embellishment.data(), embellishment.size(), " = %04X @ %04X = %02X", address_in_table, address, data));
+            embellishment = fmt::format(" = {:04X} @ {:04X} = {:02X}", address_in_table, address, data);
             break;
           }
 
@@ -983,7 +977,7 @@ struct my_6502
           {
             std::uint8_t address = calculate_address(program_counter_, i);
             std::uint8_t data = read(address);
-            embellishment.resize(snprintf(embellishment.data(), embellishment.size(), " @ %02X = %02X", address, data));
+            embellishment = fmt::format(" @ {:02X} = {:02X}", address, data);
             break;
           }
 
@@ -999,7 +993,7 @@ struct my_6502
 
             // XXX this is weird because the disassembly uses the state of the memory
             std::uint8_t data = read(address);
-            embellishment.resize(snprintf(embellishment.data(), embellishment.size(), " = %02X", data));
+            embellishment = fmt::format(" = {:02X}", data);
             break;
           }
         }
@@ -1016,10 +1010,9 @@ struct my_6502
     arg += embellishment;
 
     std::string result;
-    if(arg.size())
+    if(not arg.empty())
     {
-      result.resize(3 + 1 + arg.size() + 1);
-      result.resize(snprintf(result.data(), result.size(), "%s %s", info.mnemonic, arg.c_str()));
+      result = fmt::format("{} {}", info.mnemonic, arg);
     }
     else
     {
@@ -2083,11 +2076,11 @@ struct my_6502
         break;
       }
 
-      case BRK:
-      {
-        execute_break();
-        break;
-      }
+      //case BRK:
+      //{
+      //  execute_break();
+      //  break;
+      //}
 
       case BVC:
       {
@@ -2446,9 +2439,7 @@ struct my_6502
 
       default:
       {
-        char what[80];
-        snprintf(what, 80, "execute: Unknown opcode %02X", opcode);
-        throw std::runtime_error(what);
+        throw std::runtime_error(fmt::format("execute: Unknown opcode {:02X}", opcode));
       }
     }
 
@@ -2459,24 +2450,24 @@ struct my_6502
   {
     instruction i = read_current_instruction();
 
-    std::array<char,9> instruction_words;
+    std::string instruction_words;
     switch(i.num_bytes())
     {
       case 1:
       {
-        snprintf(instruction_words.data(), instruction_words.size(), "%02X", i.opcode);
+        instruction_words = fmt::format("{:02X}", i.opcode);
         break;
       }
 
       case 2:
       {
-        snprintf(instruction_words.data(), instruction_words.size(), "%02X %02X", i.opcode, i.byte1);
+        instruction_words = fmt::format("{:02X} {:02X}", i.opcode, i.byte1);
         break;
       }
 
       case 3:
       {
-        snprintf(instruction_words.data(), instruction_words.size(), "%02X %02X %02X", i.opcode, i.byte1, i.byte2);
+        instruction_words = fmt::format("{:02X} {:02X} {:02X}", i.opcode, i.byte1, i.byte2);
         break;
       }
 
@@ -2487,22 +2478,17 @@ struct my_6502
     }
 
     std::string disassembly = disassemble(i);
-
-    std::string registers;
-    registers.resize(30);
-    snprintf(registers.data(), registers.size(), "A:%02X X:%02X Y:%02X P:%02X SP:%02X", accumulator_, index_register_x_, index_register_y_, status_flags_as_byte(), stack_pointer_);
-
-    std::string ppu;
-    ppu.resize(30);
-    snprintf(ppu.data(), ppu.size(), "PPU:%3d,%3d", 0, 0);
+    std::string registers = fmt::format("A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}", accumulator_, index_register_x_, index_register_y_, status_flags_as_byte(), stack_pointer_);
+    std::string ppu = fmt::format("PPU:{:3d},{:3d}", 0, 0);
 
     if(is_legal(i.opcode))
     {
-      printf("%04X  %-8s  %-31s %s %s CYC:%d\n", program_counter_, instruction_words.data(), disassembly.c_str(), registers.c_str(), ppu.c_str(), cycle);
+      fmt::print(std::cout, "{:04X}  {:<8}  {:<31} {} {} CYC:{}\n", program_counter_, instruction_words, disassembly, registers, ppu, cycle);
     }
     else
     {
-      printf("%04X  %-8s *%-31s %s %s CYC:%d\n", program_counter_, instruction_words.data(), disassembly.c_str(), registers.c_str(), ppu.c_str(), cycle);
+      // denote illegal operations with a *
+      fmt::print(std::cout, "{:04X}  {:<8} *{:<31} {} {} CYC:{}\n", program_counter_, instruction_words, disassembly, registers, ppu, cycle);
     }
   }
 };
