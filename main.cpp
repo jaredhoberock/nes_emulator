@@ -29,10 +29,14 @@ struct my_bus
 
 enum operation
 {
+  // legal instructions
   ADC, AND, ASL, BCC, BCS, BEQ, BIT, BMI, BNE, BPL, BRK, BVC, BVS, CLC,
   CLD, CLI, CLV, CMP, CPX, CPY, DEC, DEX, DEY, EOR, INC, INX, INY, JMP,
   JSR, LDA, LDX, LDY, LSR, NOP, ORA, PHA, PHP, PLA, PLP, ROL, ROR, RTI,
-  RTS, SBC, SEC, SED, SEI, STA, STX, STY, TAX, TAY, TSX, TXA, TXS, TYA
+  RTS, SBC, SEC, SED, SEI, STA, STX, STY, TAX, TAY, TSX, TXA, TXS, TYA,
+
+  // "illegal" instructions 
+  DCP, Illegal_NOP, Illegal_SBC, ISC, LAX, RLA, RRA, SAX, SLO, SRE
 };
 
 
@@ -44,12 +48,116 @@ enum address_mode
 };
 
 
+enum extra_cycles_case
+{
+  no_extra_cycles = 0,
+  one_extra_cycle_if_page_boundary_crossed = 1,
+  extra_cycles_if_branch_taken = 2
+};
+
+
+int calculate_extra_cycles(std::uint8_t opcode, bool page_boundary_crossed, bool branch_taken)
+{
+  int result = 0;
+
+  switch(opcode)
+  {
+    case 0x11:
+    case 0x1C:
+    case 0x1D:
+    case 0x19:
+    case 0x31:
+    case 0x39:
+    case 0x3C:
+    case 0x3D:
+    case 0x51:
+    case 0x5C:
+    case 0x59:
+    case 0x5D:
+    case 0x71:
+    case 0x7C:
+    case 0x79:
+    case 0x7D:
+    case 0xB1:
+    case 0xB3:
+    case 0xB9:
+    case 0xBC:
+    case 0xBD:
+    case 0xBE:
+    case 0xBF:
+    case 0xD1:
+    case 0xDC:
+    case 0xD9:
+    case 0xDD:
+    case 0xF1:
+    case 0xF9:
+    case 0xFC:
+    case 0xFD:
+    {
+      result = page_boundary_crossed;
+      break;
+    }
+
+    case 0x10:
+    case 0x30:
+    case 0x50:
+    case 0x70:
+    case 0x90:
+    case 0xB0:
+    case 0xD0:
+    case 0xF0:
+    {
+      result = branch_taken;
+      if(branch_taken)
+      {
+        result += page_boundary_crossed;
+      }
+
+      break;
+    }
+  }
+
+  return result;
+}
+
+
+int calculate_extra_cycles(extra_cycles_case c, bool page_boundary_crossed, bool branch_taken)
+{
+  int result = 0;
+
+  switch(c)
+  {
+    case no_extra_cycles:
+    {
+      result = 0;
+      break;
+    }
+
+    case one_extra_cycle_if_page_boundary_crossed:
+    {
+      result = 1;
+      break;
+    }
+
+    case extra_cycles_if_branch_taken:
+    {
+      result = branch_taken + page_boundary_crossed;
+      break;
+    }
+  }
+
+  return result;
+}
+
+
 struct instruction_info
 {
+  // the mnemonic used is whatever matches nestest.log
+  // and may differ from the enumeration for illegal instructions
   const char* mnemonic;
   operation op;
   address_mode mode;
-  int num_bytes;
+  int num_cycles;
 };
 
 
@@ -57,106 +165,232 @@ std::array<instruction_info,256> initialize_instruction_info_table()
 {
   std::array<instruction_info,256> result = {};
 
-  // XXX think of a way to bake the cycle count into this table
-  result[0x01] = {"ORA", ORA, indexed_indirect};
-  result[0x05] = {"ORA", ORA, zero_page,      };
-  result[0x06] = {"ASL", ASL, zero_page,      };
-  result[0x08] = {"PHP", PHP, implied,        };
-  result[0x09] = {"ORA", ORA, immediate,      };
-  result[0x0D] = {"ORA", ORA, absolute,       };
-  result[0x0E] = {"ASL", ASL, absolute,       };
-  result[0x10] = {"BPL", BPL, relative,       };
-  result[0x0A] = {"ASL", ASL, accumulator,    };
-  result[0x18] = {"CLC", CLC, implied,        };
-  result[0x20] = {"JSR", JSR, absolute,       };
-  result[0x21] = {"AND", AND, indexed_indirect};
-  result[0x24] = {"BIT", BIT, zero_page,      };
-  result[0x25] = {"AND", AND, zero_page,      };
-  result[0x26] = {"ROL", ROL, zero_page,      };
-  result[0x28] = {"PLP", PLP, implied,        };
-  result[0x29] = {"AND", AND, immediate,      };
-  result[0x2A] = {"ROL", ROL, accumulator,    };
-  result[0x2C] = {"BIT", BIT, absolute,       };
-  result[0x2D] = {"AND", AND, absolute,       };
-  result[0x2E] = {"ROL", ROL, absolute,       };
-  result[0x30] = {"BMI", BMI, relative,       };
-  result[0x38] = {"SEC", SEC, implied,        };
-  result[0x40] = {"RTI", RTI, implied,        };
-  result[0x41] = {"EOR", EOR, indexed_indirect};
-  result[0x45] = {"EOR", EOR, zero_page,      };
-  result[0x46] = {"LSR", LSR, zero_page,      };
-  result[0x48] = {"PHA", PHA, implied,        };
-  result[0x49] = {"EOR", EOR, immediate,      };
-  result[0x4A] = {"LSR", LSR, accumulator,    };
-  result[0x4C] = {"JMP", JMP, absolute,       };
-  result[0x4D] = {"EOR", EOR, absolute,       };
-  result[0x4E] = {"LSR", LSR, absolute,       };
-  result[0x50] = {"BVC", BVC, relative,       };
-  result[0x60] = {"RTS", RTS, implied,        };
-  result[0x61] = {"ADC", ADC, indexed_indirect};
-  result[0x65] = {"ADC", ADC, zero_page,      };
-  result[0x66] = {"ROR", ROR, zero_page,      };
-  result[0x68] = {"PLA", PLA, implied,        };
-  result[0x69] = {"ADC", ADC, immediate,      };
-  result[0x6A] = {"ROR", ROR, accumulator,    };
-  result[0x6D] = {"ADC", ADC, absolute,       };
-  result[0x6E] = {"ROR", ROR, absolute,       };
-  result[0x70] = {"BVS", BVS, relative,       };
-  result[0x78] = {"SEI", SEI, implied,        };
-  result[0x81] = {"STA", STA, indexed_indirect};
-  result[0x84] = {"STY", STY, zero_page,      };
-  result[0x85] = {"STA", STA, zero_page,      };
-  result[0x86] = {"STX", STX, zero_page,      };
-  result[0x88] = {"DEY", DEY, implied,        };
-  result[0x8A] = {"TXA", TXA, implied,        };
-  result[0x8C] = {"STY", STY, absolute,       };
-  result[0x8D] = {"STA", STA, absolute,       };
-  result[0x8E] = {"STX", STX, absolute,       };
-  result[0x90] = {"BCC", BCC, relative,       };
-  result[0x98] = {"TYA", TYA, implied,        };
-  result[0x9A] = {"TXS", TXS, implied,        };
-  result[0xA0] = {"LDY", LDY, immediate,      };
-  result[0xA1] = {"LDA", LDA, indexed_indirect};
-  result[0xA2] = {"LDX", LDX, immediate,      };
-  result[0xA4] = {"LDY", LDY, zero_page,      };
-  result[0xA5] = {"LDA", LDA, zero_page,      };
-  result[0xA6] = {"LDX", LDX, zero_page,      };
-  result[0xA8] = {"TAY", TAY, implied,        };
-  result[0xA9] = {"LDA", LDA, immediate,      };
-  result[0xAA] = {"TAX", TAX, implied,        };
-  result[0xAC] = {"LDY", LDY, absolute,       };
-  result[0xAD] = {"LDA", LDA, absolute,       };
-  result[0xAE] = {"LDX", LDX, absolute,       };
-  result[0xB0] = {"BCS", BCS, relative,       };
-  result[0xB1] = {"LDA", LDA, indirect_indexed};
-  result[0xB8] = {"CLV", CLV, implied,        };
-  result[0xBA] = {"TSX", TSX, implied,        };
-  result[0xC0] = {"CPY", CPY, immediate,      };
-  result[0xC1] = {"CMP", CMP, indexed_indirect};
-  result[0xC4] = {"CPY", CPY, zero_page,      };
-  result[0xC5] = {"CMP", CMP, zero_page,      };
-  result[0xC6] = {"DEC", DEC, zero_page,      };
-  result[0xC8] = {"INY", INY, implied,        };
-  result[0xC9] = {"CMP", CMP, immediate,      };
-  result[0xCA] = {"DEX", DEX, implied,        };
-  result[0xCC] = {"CPY", CPY, absolute,       };
-  result[0xCD] = {"CMP", CMP, absolute,       };
-  result[0xCE] = {"DEC", DEC, absolute,       };
-  result[0xD0] = {"BNE", BNE, relative,       };
-  result[0xD8] = {"CLD", CLD, implied,        };
-  result[0xE0] = {"CPX", CPX, immediate,      };
-  result[0xE1] = {"SBC", SBC, indexed_indirect};
-  result[0xE4] = {"CPX", CPX, zero_page,      };
-  result[0xE5] = {"SBC", SBC, zero_page,      };
-  result[0xE6] = {"INC", INC, zero_page,      };
-  result[0xE8] = {"INX", INX, implied,        };
-  result[0xE9] = {"SBC", SBC, immediate,      };
-  result[0xEA] = {"NOP", NOP, implied,        };
-  result[0xEC] = {"CPX", CPX, absolute,       };
-  result[0xED] = {"SBC", SBC, absolute,       };
-  result[0xEE] = {"INC", INC, absolute,       };
-  result[0xF0] = {"BEQ", BEQ, relative,       };
-  result[0xF8] = {"SED", SED, implied,        };
+  result[0x00] = {"BRK", BRK,         implied,             7};
+  result[0x01] = {"ORA", ORA,         indexed_indirect,    6};
+  result[0x03] = {"SLO", SLO,         indexed_indirect,    8};
+  result[0x04] = {"NOP", Illegal_NOP, zero_page,           3};
+  result[0x05] = {"ORA", ORA,         zero_page,           3};
+  result[0x06] = {"ASL", ASL,         zero_page,           5};
+  result[0x07] = {"SLO", SLO,         zero_page,           5};
+  result[0x08] = {"PHP", PHP,         implied,             3};
+  result[0x09] = {"ORA", ORA,         immediate,           2};
+  result[0x0A] = {"ASL", ASL,         accumulator,         2};
+  result[0x0C] = {"NOP", Illegal_NOP, absolute,            4};
+  result[0x0D] = {"ORA", ORA,         absolute,            4};
+  result[0x0E] = {"ASL", ASL,         absolute,            6};
+  result[0x0F] = {"SLO", SLO,         absolute,            6};
+  result[0x10] = {"BPL", BPL,         relative,            2};
+  result[0x11] = {"ORA", ORA,         indirect_indexed,    5};
+  result[0x13] = {"SLO", SLO,         indirect_indexed,    8};
+  result[0x14] = {"NOP", Illegal_NOP, zero_page_x_indexed, 4};
+  result[0x15] = {"ORA", ORA,         zero_page_x_indexed, 4};
+  result[0x16] = {"ASL", ASL,         zero_page_x_indexed, 6};
+  result[0x17] = {"SLO", SLO,         zero_page_x_indexed, 6};
+  result[0x18] = {"CLC", CLC,         implied,             2};
+  result[0x19] = {"ORA", ORA,         absolute_y_indexed,  4};
+  result[0x1A] = {"NOP", Illegal_NOP, implied,             2};
+  result[0x1B] = {"SLO", SLO,         absolute_y_indexed,  7};
+  result[0x1C] = {"NOP", Illegal_NOP, absolute_x_indexed,  4};
+  result[0x1D] = {"ORA", ORA,         absolute_x_indexed,  4};
+  result[0x1E] = {"ASL", ASL,         absolute_x_indexed,  7};
+  result[0x1F] = {"SLO", SLO,         absolute_x_indexed,  7};
+  result[0x20] = {"JSR", JSR,         absolute,            6};
+  result[0x21] = {"AND", AND,         indexed_indirect,    6};
+  result[0x23] = {"RLA", RLA,         indexed_indirect,    8};
+  result[0x24] = {"BIT", BIT,         zero_page,           3};
+  result[0x25] = {"AND", AND,         zero_page,           3};
+  result[0x26] = {"ROL", ROL,         zero_page,           5};
+  result[0x27] = {"RLA", RLA,         zero_page,           5};
+  result[0x28] = {"PLP", PLP,         implied,             4};
+  result[0x29] = {"AND", AND,         immediate,           2};
+  result[0x2A] = {"ROL", ROL,         accumulator,         2};
+  result[0x2C] = {"BIT", BIT,         absolute,            4};
+  result[0x2D] = {"AND", AND,         absolute,            4};
+  result[0x2E] = {"ROL", ROL,         absolute,            6};
+  result[0x2F] = {"RLA", RLA,         absolute,            6};
+  result[0x30] = {"BMI", BMI,         relative,            2};
+  result[0x31] = {"AND", AND,         indirect_indexed,    5};
+  result[0x33] = {"RLA", RLA,         indirect_indexed,    8};
+  result[0x34] = {"NOP", Illegal_NOP, zero_page_x_indexed, 4};
+  result[0x35] = {"AND", AND,         zero_page_x_indexed, 4};
+  result[0x36] = {"ROL", ROL,         zero_page_x_indexed, 6};
+  result[0x37] = {"RLA", RLA,         zero_page_x_indexed, 6};
+  result[0x38] = {"SEC", SEC,         implied,             2};
+  result[0x39] = {"AND", AND,         absolute_y_indexed,  4};
+  result[0x3A] = {"NOP", Illegal_NOP, implied,             2};
+  result[0x3B] = {"RLA", RLA,         absolute_y_indexed,  7};
+  result[0x3C] = {"NOP", Illegal_NOP, absolute_x_indexed,  4};
+  result[0x3D] = {"AND", AND,         absolute_x_indexed,  4};
+  result[0x3E] = {"ROL", ROL,         absolute_x_indexed,  7};
+  result[0x3F] = {"RLA", RLA,         absolute_x_indexed,  7};
+  result[0x40] = {"RTI", RTI,         implied,             6};
+  result[0x41] = {"EOR", EOR,         indexed_indirect,    6};
+  result[0x43] = {"SRE", SRE,         indexed_indirect,    8};
+  result[0x44] = {"NOP", Illegal_NOP, zero_page,           3};
+  result[0x45] = {"EOR", EOR,         zero_page,           3};
+  result[0x46] = {"LSR", LSR,         zero_page,           5};
+  result[0x47] = {"SRE", SRE,         zero_page,           5};
+  result[0x48] = {"PHA", PHA,         implied,             3};
+  result[0x49] = {"EOR", EOR,         immediate,           2};
+  result[0x4A] = {"LSR", LSR,         accumulator,         2};
+  result[0x4C] = {"JMP", JMP,         absolute,            3};
+  result[0x4D] = {"EOR", EOR,         absolute,            4};
+  result[0x4E] = {"LSR", LSR,         absolute,            6};
+  result[0x4F] = {"SRE", SRE,         absolute,            6};
+  result[0x50] = {"BVC", BVC,         relative,            2};
+  result[0x51] = {"EOR", EOR,         indirect_indexed,    5};
+  result[0x53] = {"SRE", SRE,         indirect_indexed,    8};
+  result[0x54] = {"NOP", Illegal_NOP, zero_page_x_indexed, 4};
+  result[0x55] = {"EOR", EOR,         zero_page_x_indexed, 4};
+  result[0x56] = {"LSR", LSR,         zero_page_x_indexed, 6};
+  result[0x57] = {"SRE", SRE,         zero_page_x_indexed, 6};
+  result[0x59] = {"EOR", EOR,         absolute_y_indexed,  4};
+  result[0x5A] = {"NOP", Illegal_NOP, implied,             2};
+  result[0x5B] = {"SRE", SRE,         absolute_y_indexed,  7};
+  result[0x5C] = {"NOP", Illegal_NOP, absolute_x_indexed,  4};
+  result[0x5D] = {"EOR", EOR,         absolute_x_indexed,  4};
+  result[0x5E] = {"LSR", LSR,         absolute_x_indexed,  7};
+  result[0x5F] = {"SRE", SRE,         absolute_x_indexed,  7};
+  result[0x60] = {"RTS", RTS,         implied,             6};
+  result[0x61] = {"ADC", ADC,         indexed_indirect,    6};
+  result[0x63] = {"RRA", RRA,         indexed_indirect,    8};
+  result[0x64] = {"NOP", Illegal_NOP, zero_page,           3};
+  result[0x65] = {"ADC", ADC,         zero_page,           3};
+  result[0x66] = {"ROR", ROR,         zero_page,           5};
+  result[0x67] = {"RRA", RRA,         zero_page,           5};
+  result[0x68] = {"PLA", PLA,         implied,             4};
+  result[0x69] = {"ADC", ADC,         immediate,           2};
+  result[0x6A] = {"ROR", ROR,         accumulator,         2};
+  result[0x6C] = {"JMP", JMP,         indirect,            5};
+  result[0x6D] = {"ADC", ADC,         absolute,            4};
+  result[0x6E] = {"ROR", ROR,         absolute,            6};
+  result[0x6F] = {"RRA", RRA,         absolute,            6};
+  result[0x70] = {"BVS", BVS,         relative,            2};
+  result[0x71] = {"ADC", ADC,         indirect_indexed,    5};
+  result[0x73] = {"RRA", RRA,         indirect_indexed,    8};
+  result[0x74] = {"NOP", Illegal_NOP, zero_page_x_indexed, 4};
+  result[0x75] = {"ADC", ADC,         zero_page_x_indexed, 4};
+  result[0x76] = {"ROR", ROR,         zero_page_x_indexed, 6};
+  result[0x77] = {"RRA", RRA,         zero_page_x_indexed, 6};
+  result[0x78] = {"SEI", SEI,         implied,             2};
+  result[0x79] = {"ADC", ADC,         absolute_y_indexed,  4};
+  result[0x7A] = {"NOP", Illegal_NOP, implied,             2};
+  result[0x7B] = {"RRA", RRA,         absolute_y_indexed,  7};
+  result[0x7C] = {"NOP", Illegal_NOP, absolute_x_indexed,  4};
+  result[0x7D] = {"ADC", ADC,         absolute_x_indexed,  4};
+  result[0x7E] = {"ROR", ROR,         absolute_x_indexed,  7};
+  result[0x7F] = {"RRA", RRA,         absolute_x_indexed,  7};
+  result[0x80] = {"NOP", Illegal_NOP, immediate,           2};
+  result[0x81] = {"STA", STA,         indexed_indirect,    6};
+  result[0x83] = {"SAX", SAX,         indexed_indirect,    6};
+  result[0x84] = {"STY", STY,         zero_page,           3};
+  result[0x85] = {"STA", STA,         zero_page,           3};
+  result[0x86] = {"STX", STX,         zero_page,           3};
+  result[0x87] = {"SAX", SAX,         zero_page,           3};
+  result[0x88] = {"DEY", DEY,         implied,             2};
+  result[0x8A] = {"TXA", TXA,         implied,             2};
+  result[0x8C] = {"STY", STY,         absolute,            4};
+  result[0x8D] = {"STA", STA,         absolute,            4};
+  result[0x8E] = {"STX", STX,         absolute,            4};
+  result[0x8F] = {"SAX", SAX,         absolute,            4};
+  result[0x90] = {"BCC", BCC,         relative,            2};
+  result[0x91] = {"STA", STA,         indirect_indexed,    6};
+  result[0x94] = {"STY", STY,         zero_page_x_indexed, 4};
+  result[0x95] = {"STA", STA,         zero_page_x_indexed, 4};
+  result[0x96] = {"STX", STX,         zero_page_y_indexed, 4};
+  result[0x97] = {"SAX", SAX,         zero_page_y_indexed, 4};
+  result[0x98] = {"TYA", TYA,         implied,             2};
+  result[0x99] = {"STA", STA,         absolute_y_indexed,  5};
+  result[0x9A] = {"TXS", TXS,         implied,             2};
+  result[0x9D] = {"STA", STA,         absolute_x_indexed,  5};
+  result[0xA0] = {"LDY", LDY,         immediate,           2};
+  result[0xA1] = {"LDA", LDA,         indexed_indirect,    6};
+  result[0xA2] = {"LDX", LDX,         immediate,           2};
+  result[0xA3] = {"LAX", LAX,         indexed_indirect,    6};
+  result[0xA4] = {"LDY", LDY,         zero_page,           3};
+  result[0xA5] = {"LDA", LDA,         zero_page,           3};
+  result[0xA6] = {"LDX", LDX,         zero_page,           3};
+  result[0xA7] = {"LAX", LAX,         zero_page,           3};
+  result[0xA8] = {"TAY", TAY,         implied,             2};
+  result[0xA9] = {"LDA", LDA,         immediate,           2};
+  result[0xAA] = {"TAX", TAX,         implied,             2};
+  result[0xAC] = {"LDY", LDY,         absolute,            4};
+  result[0xAD] = {"LDA", LDA,         absolute,            4};
+  result[0xAE] = {"LDX", LDX,         absolute,            4};
+  result[0xAF] = {"LAX", LAX,         absolute,            4};
+  result[0xB0] = {"BCS", BCS,         relative,            2};
+  result[0xB1] = {"LDA", LDA,         indirect_indexed,    5};
+  result[0xB3] = {"LAX", LAX,         indirect_indexed,    5};
+  result[0xB4] = {"LDY", LDY,         zero_page_x_indexed, 4};
+  result[0xB5] = {"LDA", LDA,         zero_page_x_indexed, 4};
+  result[0xB6] = {"LDX", LDX,         zero_page_y_indexed, 4};
+  result[0xB7] = {"LAX", LAX,         zero_page_y_indexed, 4};
+  result[0xB8] = {"CLV", CLV,         implied,             2};
+  result[0xB9] = {"LDA", LDA,         absolute_y_indexed,  4};
+  result[0xBA] = {"TSX", TSX,         implied,             2};
+  result[0xBC] = {"LDY", LDY,         absolute_x_indexed,  4};
+  result[0xBD] = {"LDA", LDA,         absolute_x_indexed,  4};
+  result[0xBE] = {"LDX", LDX,         absolute_y_indexed,  4};
+  result[0xBF] = {"LAX", LAX,         absolute_y_indexed,  4};
+  result[0xC0] = {"CPY", CPY,         immediate,           2};
+  result[0xC1] = {"CMP", CMP,         indexed_indirect,    6};
+  result[0xC3] = {"DCP", DCP,         indexed_indirect,    8};
+  result[0xC4] = {"CPY", CPY,         zero_page,           3};
+  result[0xC5] = {"CMP", CMP,         zero_page,           3};
+  result[0xC6] = {"DEC", DEC,         zero_page,           5};
+  result[0xC7] = {"DCP", DCP,         zero_page,           5};
+  result[0xC8] = {"INY", INY,         implied,             2};
+  result[0xC9] = {"CMP", CMP,         immediate,           2};
+  result[0xCA] = {"DEX", DEX,         implied,             2};
+  result[0xCC] = {"CPY", CPY,         absolute,            4};
+  result[0xCD] = {"CMP", CMP,         absolute,            4};
+  result[0xCE] = {"DEC", DEC,         absolute,            6};
+  result[0xCF] = {"DCP", DCP,         absolute,            6};
+  result[0xD0] = {"BNE", BNE,         relative,            2};
+  result[0xD1] = {"CMP", CMP,         indirect_indexed,    5};
+  result[0xD3] = {"DCP", DCP,         indirect_indexed,    8};
+  result[0xD4] = {"NOP", Illegal_NOP, zero_page_x_indexed, 4};
+  result[0xD5] = {"CMP", CMP,         zero_page_x_indexed, 4};
+  result[0xD6] = {"DEC", DEC,         zero_page_x_indexed, 6};
+  result[0xD7] = {"DCP", DCP,         zero_page_x_indexed, 6};
+  result[0xD8] = {"CLD", CLD,         implied,             2};
+  result[0xD9] = {"CMP", CMP,         absolute_y_indexed,  4};
+  result[0xDA] = {"NOP", Illegal_NOP, implied,             2};
+  result[0xDB] = {"DCP", DCP,         absolute_y_indexed,  7};
+  result[0xDC] = {"NOP", Illegal_NOP, absolute_x_indexed,  4};
+  result[0xDD] = {"CMP", CMP,         absolute_x_indexed,  4};
+  result[0xDE] = {"DEC", DEC,         absolute_x_indexed,  7};
+  result[0xDF] = {"DCP", DCP,         absolute_x_indexed,  7};
+  result[0xE0] = {"CPX", CPX,         immediate,           2};
+  result[0xE1] = {"SBC", SBC,         indexed_indirect,    6};
+  result[0xE3] = {"ISB", ISC,         indexed_indirect,    8};
+  result[0xE4] = {"CPX", CPX,         zero_page,           3};
+  result[0xE5] = {"SBC", SBC,         zero_page,           3};
+  result[0xE6] = {"INC", INC,         zero_page,           5};
+  result[0xE7] = {"ISB", ISC,         zero_page,           5};
+  result[0xE8] = {"INX", INX,         implied,             2};
+  result[0xE9] = {"SBC", SBC,         immediate,           2};
+  result[0xEA] = {"NOP", NOP,         implied,             2};
+  result[0xEB] = {"SBC", Illegal_SBC, immediate,           2};
+  result[0xEC] = {"CPX", CPX,         absolute,            4};
+  result[0xED] = {"SBC", SBC,         absolute,            4};
+  result[0xEE] = {"INC", INC,         absolute,            6};
+  result[0xEF] = {"ISB", ISC,         absolute,            6};
+  result[0xF0] = {"BEQ", BEQ,         relative,            2};
+  result[0xF1] = {"SBC", SBC,         indirect_indexed,    5};
+  result[0xF3] = {"ISB", ISC,         indirect_indexed,    8};
+  result[0xF4] = {"NOP", Illegal_NOP, zero_page_x_indexed, 4};
+  result[0xF5] = {"SBC", SBC,         zero_page_x_indexed, 4};
+  result[0xF6] = {"INC", INC,         zero_page_x_indexed, 6};
+  result[0xF7] = {"ISB", ISC,         zero_page_x_indexed, 6};
+  result[0xF8] = {"SED", SED,         implied,             2};
+  result[0xF9] = {"SBC", SBC,         absolute_y_indexed,  4};
+  result[0xFA] = {"NOP", Illegal_NOP, implied,             2};
+  result[0xFB] = {"ISB", ISC,         absolute_y_indexed,  7};
+  result[0xFC] = {"NOP", Illegal_NOP, absolute_x_indexed,  4};
+  result[0xFD] = {"SBC", SBC,         absolute_x_indexed,  4};
+  result[0xFE] = {"INC", INC,         absolute_x_indexed,  7};
+  result[0xFF] = {"ISB", ISC,         absolute_x_indexed,  7};
 
   return result;
 }
@@ -165,8 +399,17 @@ std::array<instruction_info,256> initialize_instruction_info_table()
 std::array<instruction_info,256> instruction_info_table = initialize_instruction_info_table();
 
 
+bool is_legal(std::uint8_t opcode)
+{
+  return instruction_info_table[opcode].op < DCP;
+}
+
+
+
+
 struct my_6502
 {
+  static constexpr std::uint16_t interrupt_request_vector_location = 0xFFFE;
   static constexpr std::uint16_t reset_vector_location = 0xFFFC;
   static constexpr std::uint8_t  initial_stack_pointer_value = 0xFD;
   static constexpr std::uint8_t  initial_accumulator_value = 0x00;
@@ -179,7 +422,6 @@ struct my_6502
     std::uint8_t byte1;
     std::uint8_t byte2;
 
-    // XXX derive this from the address mode
     int num_bytes() const
     {
       if(instruction_info_table[opcode].mnemonic == 0)
@@ -287,10 +529,32 @@ struct my_6502
     {
       case absolute:
       {
-        std::uint8_t low_byte = i.byte1;
-        std::uint8_t high_byte = i.byte2;
+        std::uint8_t low_byte_of_result = i.byte1;
+        std::uint8_t high_byte_of_result = i.byte2;
 
-        result = (high_byte << 8) | low_byte;
+        result = (high_byte_of_result << 8) | low_byte_of_result;
+        break;
+      }
+
+      case absolute_x_indexed:
+      {
+        std::uint8_t low_byte_of_result = i.byte1;
+        std::uint8_t high_byte_of_result = i.byte2;
+
+        result = (high_byte_of_result << 8) | low_byte_of_result;
+        result += index_register_x_;
+
+        break;
+      }
+
+      case absolute_y_indexed:
+      {
+        std::uint8_t low_byte_of_result = i.byte1;
+        std::uint8_t high_byte_of_result = i.byte2;
+
+        result = (high_byte_of_result << 8) | low_byte_of_result;
+        result += index_register_y_;
+
         break;
       }
 
@@ -318,7 +582,25 @@ struct my_6502
         ++zero_page_address;
         // note that the address of the high byte may wrap around to the beginning of the zero page
         std::uint8_t high_byte_of_result = read(zero_page_address);
-        result = (high_byte_of_result << 8) + low_byte_of_result;
+        result = (high_byte_of_result << 8) | low_byte_of_result;
+        break;
+      }
+
+      case indirect:
+      {
+        std::uint8_t low_byte_of_ptr = i.byte1;
+        std::uint8_t high_byte_of_ptr = i.byte2;
+
+        std::uint8_t low_byte_of_result = read((high_byte_of_ptr << 8) | low_byte_of_ptr);
+
+        // the 6502 has a bug that prevents this addition from crossing a page boundary
+        // IOW, adding 1 + 0x##FF wraps around to 0x##00
+        // we simulate this by simply incrementing the low byte of the pointer
+        ++low_byte_of_ptr;
+
+        std::uint8_t high_byte_of_result = read((high_byte_of_ptr << 8) | low_byte_of_ptr);
+
+        result = (high_byte_of_result << 8) | low_byte_of_result;
         break;
       }
 
@@ -337,13 +619,28 @@ struct my_6502
 
       case relative:
       {
-        result = program_counter + 1 + i.byte1;
+        //result = program_counter + 1 + i.byte1;
+        // the offset is interpreted as signed data
+        std::int8_t offset = *reinterpret_cast<std::int8_t*>(&i.byte1);
+        result = program_counter + 1 + offset;
         break;
       }
 
       case zero_page:
       {
         result = i.byte1;
+        break;
+      }
+
+      case zero_page_x_indexed:
+      {
+        result = i.byte1 + index_register_x_;
+        break;
+      }
+
+      case zero_page_y_indexed:
+      {
+        result = i.byte1 + index_register_y_;
         break;
       }
 
@@ -377,6 +674,18 @@ struct my_6502
         break;
       }
 
+      case absolute_x_indexed:
+      {
+        arg.resize(snprintf(arg.data(), arg.size(), "$%02X%02X,X", i.byte2, i.byte1));
+        break;
+      }
+
+      case absolute_y_indexed:
+      {
+        arg.resize(snprintf(arg.data(), arg.size(), "$%02X%02X,Y", i.byte2, i.byte1));
+        break;
+      }
+
       case immediate:
       {
         arg.resize(snprintf(arg.data(), arg.size(), "#$%02X", i.byte1));
@@ -394,6 +703,12 @@ struct my_6502
         break;
       }
 
+      case indirect:
+      {
+        arg.resize(snprintf(arg.data(), arg.size(), "($%02X%02X)", i.byte2, i.byte1));
+        break;
+      }
+
       case indirect_indexed:
       {
         arg.resize(snprintf(arg.data(), arg.size(), "($%02X),Y", i.byte1));
@@ -402,15 +717,26 @@ struct my_6502
 
       case relative:
       {
-        // XXX this is weird because the "disassembly" uses the state of the cpu
-        std::uint16_t target = program_counter_ + i.num_bytes() + i.byte1;
-        arg.resize(snprintf(arg.data(), arg.size(), "$%04X", target));
+        std::uint16_t address = calculate_address(program_counter_ + 1, i);
+        arg.resize(snprintf(arg.data(), arg.size(), "$%04X", address));
         break;
       }
 
       case zero_page:
       {
         arg.resize(snprintf(arg.data(), arg.size(), "$%02X", i.byte1));
+        break;
+      }
+
+      case zero_page_x_indexed:
+      {
+        arg.resize(snprintf(arg.data(), arg.size(), "$%02X,X", i.byte1));
+        break;
+      }
+
+      case zero_page_y_indexed:
+      {
+        arg.resize(snprintf(arg.data(), arg.size(), "$%02X,Y", i.byte1));
         break;
       }
 
@@ -421,72 +747,122 @@ struct my_6502
     }
 
     // some instructions on memory need to be embellished with the current content of the memory location 
-    // XXX me may not need to consider the operation at all, the address mode might be enough
+    std::string embellishment;
+
     switch(info.op)
     {
       case ADC:
       case AND:
       case ASL:
+      case BIT:
       case CMP:
       case CPX:
       case CPY:
+      case DCP:
       case DEC:
       case EOR:
+      case Illegal_NOP:
+      case Illegal_SBC:
       case INC:
+      case ISC:
+      case JMP:
+      case LAX:
       case LDA:
       case LDX:
       case LDY:
       case LSR:
+      case NOP:
       case ORA:
       case ROL:
       case ROR:
+      case RLA:
+      case RRA:
+      case SAX:
       case SBC:
-      case BIT:
+      case SLO:
+      case SRE:
       case STA:
       case STX:
       case STY:
       {
-        // instructions with immediate mode addressing need no embellishment
-        if(info.mode == immediate)
+        // instructions with certain kinds of address mode need no embellishment
+        if(info.mode == immediate or info.mode == accumulator or info.mode == relative)
         {
           break;
         }
 
-        std::string embellishment;
         embellishment.resize(30);
 
-        if(info.mode == indexed_indirect)
+        switch(info.mode)
         {
-          // XXX this is weird because the disassembly uses the state of the memory
-          std::uint8_t x_plus_immediate = index_register_x_ + i.byte1;
-          std::uint16_t address = calculate_address(program_counter_, i);
-          std::uint8_t data = read(address);
-          embellishment.resize(snprintf(embellishment.data(), embellishment.size(), " @ %02X = %04X = %02X", x_plus_immediate, address, data));
-        }
-        else if(info.mode == indirect_indexed)
-        {
-          // XXX this is weird because the disassembly uses the state of the memory
-          std::uint8_t zero_page_address = i.byte1;
-          std::uint8_t low_byte_of_address = read(zero_page_address);
-          ++zero_page_address;
-          // note that the address of the high byte may wrap around to the beginning of the zero page
-          std::uint8_t high_byte_of_address = read(zero_page_address);
-          std::uint16_t address_in_table = (high_byte_of_address << 8) + low_byte_of_address;
+          case absolute_x_indexed:
+          case absolute_y_indexed:
+          {
+            std::uint16_t address = calculate_address(program_counter_, i);
+            std::uint8_t data = read(address);
+            embellishment.resize(snprintf(embellishment.data(), embellishment.size(), " @ %04X = %02X", address, data));
+            break;
+          }
 
-          std::uint16_t address = calculate_address(program_counter_, i);
-          std::uint8_t data = read(address);
-          embellishment.resize(snprintf(embellishment.data(), embellishment.size(), " = %04X @ %04X = %02X", address_in_table, address, data));
-        }
-        else
-        {
-          std::uint16_t address = calculate_address(program_counter_, i);
+          case indexed_indirect:
+          {
+            // XXX this is weird because the disassembly uses the state of the memory
+            std::uint8_t x_plus_immediate = index_register_x_ + i.byte1;
+            std::uint16_t address = calculate_address(program_counter_, i);
+            std::uint8_t data = read(address);
+            embellishment.resize(snprintf(embellishment.data(), embellishment.size(), " @ %02X = %04X = %02X", x_plus_immediate, address, data));
+            break;
+          }
 
-          // XXX this is weird because the disassembly uses the state of the memory
-          std::uint8_t data = read(address);
-          embellishment.resize(snprintf(embellishment.data(), embellishment.size(), " = %02X", data));
+          case indirect:
+          {
+            std::uint16_t address = calculate_address(program_counter_, i);
+            embellishment.resize(snprintf(embellishment.data(), embellishment.size(), " = %04X", address));
+            break;
+          }
+
+          case indirect_indexed:
+          {
+            // XXX this is weird because the disassembly uses the state of the memory
+            std::uint8_t zero_page_address = i.byte1;
+            std::uint8_t low_byte_of_address = read(zero_page_address);
+            ++zero_page_address;
+            // note that the address of the high byte may wrap around to the beginning of the zero page
+            std::uint8_t high_byte_of_address = read(zero_page_address);
+            std::uint16_t address_in_table = (high_byte_of_address << 8) + low_byte_of_address;
+
+            std::uint16_t address = calculate_address(program_counter_, i);
+            std::uint8_t data = read(address);
+            embellishment.resize(snprintf(embellishment.data(), embellishment.size(), " = %04X @ %04X = %02X", address_in_table, address, data));
+            break;
+          }
+
+          case zero_page_x_indexed:
+          case zero_page_y_indexed:
+          {
+            std::uint8_t address = calculate_address(program_counter_, i);
+            std::uint8_t data = read(address);
+            embellishment.resize(snprintf(embellishment.data(), embellishment.size(), " @ %02X = %02X", address, data));
+            break;
+          }
+
+          default:
+          {
+            if(info.op == JMP)
+            {
+              // JMP needs no embellishment in absolute address mode
+              break;
+            }
+
+            std::uint16_t address = calculate_address(program_counter_, i);
+
+            // XXX this is weird because the disassembly uses the state of the memory
+            std::uint8_t data = read(address);
+            embellishment.resize(snprintf(embellishment.data(), embellishment.size(), " = %02X", data));
+            break;
+          }
         }
 
-        arg += embellishment;
         break;
       }
 
@@ -495,6 +871,8 @@ struct my_6502
         break;
       }
     }
+
+    arg += embellishment;
 
     std::string result;
     if(arg.size())
@@ -563,7 +941,7 @@ struct my_6502
     --stack_pointer_;
   }
 
-  int execute_add_with_carry(std::uint16_t address, address_mode mode)
+  void execute_add_with_carry(std::uint16_t address)
   {
     std::uint8_t m = read(address);
 
@@ -583,62 +961,9 @@ struct my_6502
 
     // set the negative flag
     negative_flag_ = 0b10000000 & accumulator_;
-
-    // the cycles consumed depends on the address mode
-    int result = 0;
-
-    switch(mode)
-    {
-      case immediate:
-      {
-        result = 2;
-        break;
-      }
-
-      case zero_page:
-      {
-        result = 3;
-        break;
-      }
-
-      case absolute:
-      case zero_page_x_indexed:
-      {
-        result = 4;
-        break;
-      }
-
-      case absolute_x_indexed:
-      case absolute_y_indexed:
-      {
-        result = 4;
-        // XXX +1 if paged crossed
-        break;
-      }
-
-      case indirect_indexed:
-      {
-        result = 5;
-        // XXX +1 if page crossed
-        break;
-      }
-
-      case indexed_indirect:
-      {
-        result = 6;
-        break;
-      }
-
-      default:
-      {
-        break;
-      }
-    }
-
-    return result;
   }
 
-  int execute_arithmetic_shift_left(std::uint16_t address, address_mode mode)
+  void execute_arithmetic_shift_left(std::uint16_t address)
   {  
     std::uint8_t m = read(address);
 
@@ -656,45 +981,9 @@ struct my_6502
 
     // store
     write(address, m);
-
-    int result = 0;
-
-    switch(mode)
-    {
-      case zero_page:
-      {
-        result = 5;
-        break;
-      }
-
-      case zero_page_x_indexed:
-      {
-        result = 6;
-        break;
-      }
-
-      case absolute:
-      {
-        result = 6;
-        break;
-      }
-
-      case absolute_x_indexed:
-      {
-        result = 7;
-        break;
-      }
-
-      default:
-      {
-        break;
-      }
-    }
-
-    return result;
   }
 
-  int execute_arithmetic_shift_left_accumulator()
+  void execute_arithmetic_shift_left_accumulator()
   {  
     // set the carry flag
     carry_flag_ = 0b10000000 & accumulator_;
@@ -707,11 +996,9 @@ struct my_6502
 
     // set the negative flag
     negative_flag_ = 0b10000000 & accumulator_;
-
-    return 2;
   }
 
-  int execute_bit_test(std::uint16_t address, address_mode mode)
+  void execute_bit_test(std::uint16_t address)
   {
     std::uint8_t data = read(address);
 
@@ -723,118 +1010,99 @@ struct my_6502
 
     // set the negative flag to bit 7 of the data
     negative_flag_ = 0b10000000 & data;
-
-    // the cycles consumed depends on the address mode
-    int result = 0;
-    switch(mode)
-    {
-      case zero_page:
-      {
-        result = 3;
-        break;
-      }
-
-      case absolute:
-      {
-        result = 4;
-        break;
-      }
-
-      default:
-      {
-      }
-    }
-
-    return result;
   }
 
-  int execute_branch(bool condition, std::uint16_t target)
+  // returns whether or not the branch was taken
+  bool execute_branch(bool condition, std::uint16_t target)
   {
-    int result = 2;
-
     if(condition)
     {
-      // the branch succeeds so add a cycle
-      result += 1;
-
-      // remember the old program counter
-      std::uint16_t old_program_counter = program_counter_;
-
       // assign the target to the program counter
       program_counter_ = target;
-
-      // add a cycle if we branch to a new page
-      if((old_program_counter >> 8) != (program_counter_ >> 8))
-      {
-        result += 1;
-      }
     }
 
-    return result;
+    return condition;
   }
 
-  int execute_branch_if_carry_clear(std::uint16_t target)
+  bool execute_branch_if_carry_clear(std::uint16_t target)
   {
     return execute_branch(not carry_flag_, target);
   }
 
-  int execute_branch_if_carry_set(std::uint16_t target)
+  bool execute_branch_if_carry_set(std::uint16_t target)
   {
     return execute_branch(carry_flag_, target);
   }
 
-  int execute_branch_if_equal_to_zero(std::uint16_t target)
+  bool execute_branch_if_equal_to_zero(std::uint16_t target)
   {
     return execute_branch(zero_flag_, target);
   }
 
-  int execute_branch_if_minus(std::uint16_t target)
+  bool execute_branch_if_minus(std::uint16_t target)
   {
     return execute_branch(negative_flag_, target);
   }
 
-  int execute_branch_if_not_equal_to_zero(std::uint16_t address)
+  bool execute_branch_if_not_equal_to_zero(std::uint16_t address)
   {
     return execute_branch(not zero_flag_, address);
   }
 
-  int execute_branch_if_overflow_clear(std::uint16_t address)
+  bool execute_branch_if_overflow_clear(std::uint16_t address)
   {
     return execute_branch(not overflow_flag_, address);
   }
 
-  int execute_branch_if_overflow_set(std::uint16_t address)
+  bool execute_branch_if_overflow_set(std::uint16_t address)
   {
     return execute_branch(overflow_flag_, address);
   }
 
-  int execute_branch_if_positive(std::uint16_t address)
+  bool execute_branch_if_positive(std::uint16_t address)
   {
     return execute_branch(not negative_flag_, address);
   }
 
-  int execute_clear_flag(bool& flag)
+  void execute_break()
+  {
+    --program_counter_;
+
+    // push the program counter to the stack
+    std::uint8_t low_pc_byte = static_cast<std::uint8_t>(program_counter_);
+    std::uint8_t high_pc_byte = program_counter_ >> 8;
+
+    push_stack(high_pc_byte);
+    push_stack(low_pc_byte);
+
+    // push the processor status to the stack
+    execute_push_processor_status();
+
+    // set the program counter to the interrupt request vector
+    program_counter_ = read(interrupt_request_vector_location) | (read(interrupt_request_vector_location + 1) << 8);
+  }
+
+  void execute_clear_flag(bool& flag)
   {
     flag = false;
-    return 2;
   }
 
-  int execute_clear_carry_flag()
+  void execute_clear_carry_flag()
   {
-    return execute_clear_flag(carry_flag_);
+    execute_clear_flag(carry_flag_);
   }
 
-  int execute_clear_decimal_mode_flag()
+  void execute_clear_decimal_mode_flag()
   {
-    return execute_clear_flag(decimal_mode_flag_);
+    execute_clear_flag(decimal_mode_flag_);
   }
 
-  int execute_clear_overflow_flag()
+  void execute_clear_overflow_flag()
   {
-    return execute_clear_flag(overflow_flag_);
+    execute_clear_flag(overflow_flag_);
   }
 
-  int execute_compare(std::uint8_t reg, std::uint16_t address, address_mode mode)
+  void execute_compare(std::uint8_t reg, std::uint16_t address)
   {
     std::uint8_t m = read(address);
 
@@ -848,73 +1116,21 @@ struct my_6502
 
     // set the negative flag based on the sign of the difference
     negative_flag_ = 0b10000000 & difference;
-
-    // the cycles consumed depends on the address mode
-    int result = 0;
-    switch(mode)
-    {
-      case immediate:
-      {
-        result = 2;
-        break;
-      }
-
-      case zero_page:
-      {
-        result = 3;
-        break;
-      }
-
-      case absolute:
-      case zero_page_x_indexed:
-      {
-        result = 4;
-        break;
-      }
-
-      case absolute_x_indexed:
-      case absolute_y_indexed:
-      {
-        result = 4;
-        // XXX +1 if page is crossed
-        break;
-      }
-
-      case indirect_indexed:
-      {
-        result = 5;
-        // XXX +1 if page is crossed
-        break;
-      }
-
-      case indexed_indirect:
-      {
-        result = 6;
-        break;
-      }
-
-      default:
-      {
-        break;
-      }
-    }
-
-    return result;
   }
 
-  int execute_compare_accumulator(std::uint16_t address, address_mode mode)
+  void execute_compare_accumulator(std::uint16_t address)
   {
-    return execute_compare(accumulator_, address, mode);
+    execute_compare(accumulator_, address);
   }
 
-  int execute_compare_index_register_x(std::uint16_t address, address_mode mode)
+  void execute_compare_index_register_x(std::uint16_t address)
   {
-    return execute_compare(index_register_x_, address, mode);
+    execute_compare(index_register_x_, address);
   }
 
-  int execute_compare_index_register_y(std::uint16_t address, address_mode mode)
+  void execute_compare_index_register_y(std::uint16_t address)
   {
-    return execute_compare(index_register_y_, address, mode);
+    execute_compare(index_register_y_, address);
   }
 
   void execute_decrement(std::uint8_t& target)
@@ -929,19 +1145,17 @@ struct my_6502
     negative_flag_ = 0b10000000 & target;
   }
 
-  int execute_decrement_index_register_x()
+  void execute_decrement_index_register_x()
   {
     execute_decrement(index_register_x_);
-    return 2;
   }
 
-  int execute_decrement_index_register_y()
+  void execute_decrement_index_register_y()
   {
     execute_decrement(index_register_y_);
-    return 2;
   }
 
-  int execute_decrement_memory(std::uint16_t address, address_mode mode)
+  void execute_decrement_memory(std::uint16_t address)
   {
     // read the memory location
     std::uint8_t m = read(address);
@@ -951,40 +1165,10 @@ struct my_6502
 
     // write the result to memory
     write(address, m);
-
-    // the cycles consumed depends on the address mode
-    int result = 0;
-    switch(mode)
-    {
-      case zero_page:
-      {
-        result = 5;
-        break;
-      }
-
-      case absolute:
-      case zero_page_x_indexed:
-      {
-        result = 6;
-        break;
-      }
-
-      case absolute_x_indexed:
-      {
-        result = 7;
-        break;
-      }
-
-      default:
-      {
-      }
-    }
-
-    return result;
   }
 
   template<class Op>
-  int execute_logical_operation(Op op, std::uint16_t address, address_mode mode)
+  void execute_logical_operation(Op op, std::uint16_t address)
   {
     std::uint8_t m = read(address);
 
@@ -996,62 +1180,11 @@ struct my_6502
 
     // set the negative flag
     negative_flag_ = 0b10000000 & accumulator_;
-
-    // the cycles consumed depends on the address mode
-    int result = 0;
-    switch(mode)
-    {
-      case immediate:
-      {
-        result = 2;
-        break;
-      }
-
-      case zero_page:
-      {
-        result = 3;
-        break;
-      }
-
-      case zero_page_x_indexed:
-      case absolute:
-      {
-        result = 4;
-        break;
-      }
-
-      case absolute_x_indexed:
-      case absolute_y_indexed:
-      {
-        result = 4;
-        // XXX +1 if page crossed
-        break;
-      }
-
-      case indirect_indexed:
-      {
-        result = 5;
-        break;
-      }
-
-      case indexed_indirect:
-      {
-        result = 6;
-        break;
-      }
-
-      default:
-      {
-        break;
-      }
-    }
-
-    return result;
   }
 
-  int execute_exclusive_or(std::uint16_t address, address_mode mode)
+  void execute_exclusive_or(std::uint16_t address)
   {
-    return execute_logical_operation(std::bit_xor{}, address, mode);
+    execute_logical_operation(std::bit_xor{}, address);
   }
 
   void execute_increment(std::uint8_t& target)
@@ -1066,19 +1199,17 @@ struct my_6502
     negative_flag_ = 0b10000000 & target;
   }
 
-  int execute_increment_index_register_x()
+  void execute_increment_index_register_x()
   {
     execute_increment(index_register_x_);
-    return 2;
   }
 
-  int execute_increment_index_register_y()
+  void execute_increment_index_register_y()
   {
     execute_increment(index_register_y_);
-    return 2;
   }
 
-  int execute_increment_memory(std::uint16_t address, address_mode mode)
+  void execute_increment_memory(std::uint16_t address)
   {
     // read the memory location
     std::uint8_t m = read(address);
@@ -1088,47 +1219,15 @@ struct my_6502
 
     // write the result to memory
     write(address, m);
-
-    // the cycles consumed depends on the address mode
-    int result = 0;
-    switch(mode)
-    {
-      case zero_page:
-      {
-        result = 5;
-        break;
-      }
-
-      case absolute:
-      case zero_page_x_indexed:
-      {
-        result = 6;
-        break;
-      }
-
-      case absolute_x_indexed:
-      {
-        result = 7;
-        break;
-      }
-
-      default:
-      {
-      }
-    }
-
-    return result;
   }
 
-  int execute_jump(std::uint16_t address)
+  void execute_jump(std::uint16_t address)
   {
     // set the program counter
     program_counter_ = address;
-
-    return 3;
   }
 
-  int execute_jump_to_subroutine(std::uint16_t address)
+  void execute_jump_to_subroutine(std::uint16_t address)
   {
     --program_counter_;
 
@@ -1141,11 +1240,9 @@ struct my_6502
 
     // set the program counter
     program_counter_ = address;
-
-    return 6;
   }
 
-  int execute_load(std::uint8_t& reg, std::uint16_t address, address_mode mode)
+  void execute_load(std::uint8_t& reg, std::uint16_t address)
   {
     std::uint8_t m = read(address);
 
@@ -1157,86 +1254,34 @@ struct my_6502
 
     // set the negative flag
     negative_flag_ = 0b10000000 & reg;
-
-    // the cycles consumed depends on the address mode
-    int result = 0;
-    switch(mode)
-    {
-      case immediate:
-      {
-        result = 2;
-        break;
-      }
-
-      case zero_page:
-      {
-        result = 3;
-        break;
-      }
-
-      case zero_page_x_indexed:
-      case absolute:
-      {
-        result = 4;
-        break;
-      }
-
-      case absolute_x_indexed:
-      case absolute_y_indexed:
-      {
-        result = 4;
-        // XXX +1 if page crossed
-        break;
-      }
-
-      case indirect_indexed:
-      {
-        result = 5;
-        // XXX +1 if page crossed
-        break;
-      }
-
-      case indexed_indirect:
-      {
-        result = 6;
-        break;
-      }
-
-      default:
-      {
-        break;
-      }
-    }
-
-    return result;
   }
 
-  int execute_load_accumulator(std::uint16_t address, address_mode mode)
+  void execute_load_accumulator(std::uint16_t address)
   {
-    return execute_load(accumulator_, address, mode);
+    execute_load(accumulator_, address);
   }
 
-  int execute_load_index_register_x(std::uint16_t address, address_mode mode)
+  void execute_load_index_register_x(std::uint16_t address)
   {
-    return execute_load(index_register_x_, address, mode);
+    execute_load(index_register_x_, address);
   }
 
-  int execute_load_index_register_y(std::uint16_t address, address_mode mode)
+  void execute_load_index_register_y(std::uint16_t address)
   {
-    return execute_load(index_register_y_, address, mode);
+    execute_load(index_register_y_, address);
   }
 
-  int execute_logical_and(std::uint16_t address, address_mode mode)
+  void execute_logical_and(std::uint16_t address)
   {
-    return execute_logical_operation(std::bit_and{}, address, mode);
+    execute_logical_operation(std::bit_and{}, address);
   }
 
-  int execute_logical_inclusive_or(std::uint16_t address, address_mode mode)
+  void execute_logical_inclusive_or(std::uint16_t address)
   {
-    return execute_logical_operation(std::bit_or{}, address, mode);
+    execute_logical_operation(std::bit_or{}, address);
   }
 
-  int execute_logical_shift_right(std::uint16_t address, address_mode mode)
+  void execute_logical_shift_right(std::uint16_t address)
   {  
     std::uint8_t m = read(address);
 
@@ -1254,45 +1299,9 @@ struct my_6502
 
     // store
     write(address, m);
-
-    int result = 0;
-
-    switch(mode)
-    {
-      case zero_page:
-      {
-        result = 5;
-        break;
-      }
-
-      case zero_page_x_indexed:
-      {
-        result = 6;
-        break;
-      }
-
-      case absolute:
-      {
-        result = 6;
-        break;
-      }
-
-      case absolute_x_indexed:
-      {
-        result = 7;
-        break;
-      }
-
-      default:
-      {
-        break;
-      }
-    }
-
-    return result;
   }
 
-  int execute_logical_shift_right_accumulator()
+  void execute_logical_shift_right_accumulator()
   {  
     // set the carry flag
     carry_flag_ = 0b00000001 & accumulator_;
@@ -1305,18 +1314,14 @@ struct my_6502
 
     // set the negative flag
     negative_flag_ = 0b10000000 & accumulator_;
-
-    return 2;
   }
 
-  int execute_no_operation()
+  void execute_no_operation()
   {
     // no operation
-
-    return 2;
   }
 
-  int execute_pull_accumulator()
+  void execute_pull_accumulator()
   {
     // pop the stack into the accumulator
     accumulator_ = pop_stack();
@@ -1326,11 +1331,9 @@ struct my_6502
 
     // set the negative flag
     negative_flag_ = 0b10000000 & accumulator_;
-
-    return 4;
   }
 
-  int execute_pull_processor_status()
+  void execute_pull_processor_status()
   {
     std::uint8_t data = pop_stack();
 
@@ -1340,19 +1343,15 @@ struct my_6502
     interrupt_request_disable_flag_ = 0b00000100 & data;
     zero_flag_                      = 0b00000010 & data;
     carry_flag_                     = 0b00000001 & data;
-
-    return 4;
   }
 
-  int execute_push_accumulator()
+  void execute_push_accumulator()
   {
     // push the value of the accumulator on to the stack
     push_stack(accumulator_);
-
-    return 3;
   }
 
-  int execute_push_processor_status()
+  void execute_push_processor_status()
   {
     // push the flags on to the stack
 
@@ -1362,11 +1361,9 @@ struct my_6502
     value |= 0b00010000;
     
     push_stack(value);
-
-    return 3;
   }
 
-  int execute_return_from_interrupt()
+  void execute_return_from_interrupt()
   {
     std::uint8_t flags = pop_stack();
 
@@ -1381,21 +1378,17 @@ struct my_6502
     std::uint8_t high_pc_byte = pop_stack();
 
     program_counter_ = (high_pc_byte << 8) + low_pc_byte;
-
-    return 6;
   }
 
-  int execute_return_from_subroutine()
+  void execute_return_from_subroutine()
   {
     std::uint8_t low_pc_byte = pop_stack();
     std::uint8_t high_pc_byte = pop_stack();
 
     program_counter_ = (high_pc_byte << 8) + low_pc_byte + 1;
-
-    return 6;
   }
 
-  int execute_rotate_left(std::uint16_t address, address_mode mode)
+  void execute_rotate_left(std::uint16_t address)
   {  
     std::uint8_t m = read(address);
 
@@ -1426,45 +1419,9 @@ struct my_6502
 
     // store
     write(address, m);
-
-    int result = 0;
-
-    switch(mode)
-    {
-      case zero_page:
-      {
-        result = 5;
-        break;
-      }
-
-      case zero_page_x_indexed:
-      {
-        result = 6;
-        break;
-      }
-
-      case absolute:
-      {
-        result = 6;
-        break;
-      }
-
-      case absolute_x_indexed:
-      {
-        result = 7;
-        break;
-      }
-
-      default:
-      {
-        break;
-      }
-    }
-
-    return result;
   }
 
-  int execute_rotate_left_accumulator()
+  void execute_rotate_left_accumulator()
   {  
     // remember the old carry flag
     bool old_carry_flag = carry_flag_;
@@ -1490,11 +1447,9 @@ struct my_6502
 
     // set the negative flag
     negative_flag_ = 0b10000000 & accumulator_;
-
-    return 2;
   }
 
-  int execute_rotate_right(std::uint16_t address, address_mode mode)
+  void execute_rotate_right(std::uint16_t address)
   {  
     std::uint8_t m = read(address);
 
@@ -1525,45 +1480,9 @@ struct my_6502
 
     // store
     write(address, m);
-
-    int result = 0;
-
-    switch(mode)
-    {
-      case zero_page:
-      {
-        result = 5;
-        break;
-      }
-
-      case zero_page_x_indexed:
-      {
-        result = 6;
-        break;
-      }
-
-      case absolute:
-      {
-        result = 6;
-        break;
-      }
-
-      case absolute_x_indexed:
-      {
-        result = 7;
-        break;
-      }
-
-      default:
-      {
-        break;
-      }
-    }
-
-    return result;
   }
 
-  int execute_rotate_right_accumulator()
+  void execute_rotate_right_accumulator()
   {  
     // remember the old carry flag
     bool old_carry_flag = carry_flag_;
@@ -1589,97 +1508,55 @@ struct my_6502
 
     // set the negative flag
     negative_flag_ = 0b10000000 & accumulator_;
-
-    return 2;
   }
 
-  int execute_set_flag(bool& flag)
+  void execute_set_flag(bool& flag)
   {
     flag = true;
-    return 2;
   }
 
-  int execute_set_carry_flag()
+  void execute_set_carry_flag()
   {
-    return execute_set_flag(carry_flag_);
+    execute_set_flag(carry_flag_);
   }
 
-  int execute_set_decimal_mode_flag()
+  void execute_set_decimal_mode_flag()
   {
-    return execute_set_flag(decimal_mode_flag_);
+    execute_set_flag(decimal_mode_flag_);
   }
 
-  int execute_set_interrupt_disable()
+  void execute_set_interrupt_disable()
   {
-    return execute_set_flag(interrupt_request_disable_flag_);
+    execute_set_flag(interrupt_request_disable_flag_);
   }
 
-  int execute_store(std::uint8_t reg, std::uint16_t address, address_mode mode)
+  void execute_store(std::uint8_t reg, std::uint16_t address)
   {
-    if(address == 0x0180)
-    {
-      std::cout << "execute_store: storing to 0x0180" << std::endl;
-    }
-
     // store the contents of the register to the address
     write(address, reg);
-
-    // the cycles consumed depends on the address mode
-    int result = 0;
-    switch(mode)
-    {
-      case zero_page:
-      {
-        result = 3;
-        break;
-      }
-
-      case zero_page_x_indexed:
-      case absolute:
-      {
-        result = 4;
-        break;
-      }
-
-      case absolute_x_indexed:
-      case absolute_y_indexed:
-      {
-        result = 5;
-        break;
-      }
-
-      case indirect_indexed:
-      case indexed_indirect:
-      {
-        result = 6;
-        break;
-      }
-
-      default:
-      {
-        break;
-      }
-    }
-
-    return result;
   }
 
-  int execute_store_accumulator(std::uint16_t address, address_mode mode)
+  void execute_store_accumulator(std::uint16_t address)
   {
-    return execute_store(accumulator_, address, mode);
+    execute_store(accumulator_, address);
   }
 
-  int execute_store_index_register_x(std::uint16_t address, address_mode mode)
+  void execute_store_logical_and_of_accumulator_and_index_register_x(std::uint16_t address)
   {
-    return execute_store(index_register_x_, address, mode);
+    execute_store(accumulator_ & index_register_x_, address);
   }
 
-  int execute_store_index_register_y(std::uint16_t address, address_mode mode)
+  void execute_store_index_register_x(std::uint16_t address)
   {
-    return execute_store(index_register_y_, address, mode);
+    execute_store(index_register_x_, address);
   }
 
-  int execute_subtract_with_carry(std::uint16_t address, address_mode mode)
+  void execute_store_index_register_y(std::uint16_t address)
+  {
+    execute_store(index_register_y_, address);
+  }
+
+  void execute_subtract_with_carry(std::uint16_t address)
   {
     std::uint8_t m = read(address);
 
@@ -1701,62 +1578,9 @@ struct my_6502
 
     // set the negative flag
     negative_flag_ = 0b10000000 & accumulator_;
-
-    // the cycles consumed depends on the address mode
-    int result = 0;
-
-    switch(mode)
-    {
-      case immediate:
-      {
-        result = 2;
-        break;
-      }
-
-      case zero_page:
-      {
-        result = 3;
-        break;
-      }
-
-      case absolute:
-      case zero_page_x_indexed:
-      {
-        result = 4;
-        break;
-      }
-
-      case absolute_x_indexed:
-      case absolute_y_indexed:
-      {
-        result = 4;
-        // XXX +1 if paged crossed
-        break;
-      }
-
-      case indirect_indexed:
-      {
-        result = 5;
-        // XXX +1 if page crossed
-        break;
-      }
-
-      case indexed_indirect:
-      {
-        result = 6;
-        break;
-      }
-
-      default:
-      {
-        break;
-      }
-    }
-
-    return result;
   }
 
-  int execute_transfer(std::uint8_t from_reg, std::uint8_t& to_reg) 
+  void execute_transfer(std::uint8_t from_reg, std::uint8_t& to_reg) 
   {
     // store the value in the from reg to the to register
     to_reg = from_reg;
@@ -1766,61 +1590,212 @@ struct my_6502
 
     // set the negative flag
     negative_flag_ = 0b10000000 & to_reg;
-
-    return 2;
   }
 
-  int execute_transfer_accumulator_to_index_register_x()
+  void execute_transfer_accumulator_to_index_register_x()
   {
-    return execute_transfer(accumulator_, index_register_x_);
+    execute_transfer(accumulator_, index_register_x_);
   }
 
-  int execute_transfer_accumulator_to_index_register_y()
+  void execute_transfer_accumulator_to_index_register_y()
   {
-    return execute_transfer(accumulator_, index_register_y_);
+    execute_transfer(accumulator_, index_register_y_);
   }
 
-  int execute_transfer_index_register_x_to_accumulator()
+  void execute_transfer_index_register_x_to_accumulator()
   {
-    return execute_transfer(index_register_x_, accumulator_);
+    execute_transfer(index_register_x_, accumulator_);
   }
 
-  int execute_transfer_index_register_x_to_stack_pointer()
+  void execute_transfer_index_register_x_to_stack_pointer()
   {
     stack_pointer_ = index_register_x_;
 
     // no flags are affected
-
-    return 2;
   }
 
-  int execute_transfer_index_register_y_to_accumulator()
+  void execute_transfer_index_register_y_to_accumulator()
   {
-    return execute_transfer(index_register_y_, accumulator_);
+    execute_transfer(index_register_y_, accumulator_);
   }
 
-  int execute_transfer_stack_pointer_to_index_register_x()
+  void execute_transfer_stack_pointer_to_index_register_x()
   {
-    return execute_transfer(stack_pointer_, index_register_x_);
+    execute_transfer(stack_pointer_, index_register_x_);
   }
 
-  // XXX this needs to indicate when a page boundary is crossed
-  //     during some of this math
-  // XXX break these cases into individual functions
-  std::uint16_t calculate_address(address_mode mode)
+  std::uint16_t calculate_absolute_address()
   {
-    std::uint16_t result = 0;
+    std::uint8_t low_byte = read(program_counter_);
+    ++program_counter_;
+    std::uint8_t high_byte = read(program_counter_);
+    ++program_counter_;
+
+    return (high_byte << 8) | low_byte;
+  }
+
+  // returns a pair containing the calculated address and whether or not a page boundary
+  // was crossed while calculating that address
+  std::pair<std::uint16_t,bool> calculate_absolute_indexed_address(std::uint8_t index_register)
+  {
+    std::uint8_t low_byte = read(program_counter_);
+    ++program_counter_;
+    std::uint8_t high_byte = read(program_counter_);
+    ++program_counter_;
+
+    std::uint16_t result = (high_byte << 8) | low_byte;
+    result += index_register;
+
+    // check for crossing page boundary
+    bool page_boundary_crossed = (result >> 8) != high_byte;
+
+    return {result, page_boundary_crossed};
+  }
+
+  // returns a pair containing the calculated address and whether or not a page boundary
+  // was crossed while calculating that address
+  std::pair<std::uint16_t,bool> calculate_absolute_x_indexed_address()
+  {
+    return calculate_absolute_indexed_address(index_register_x_);
+  }
+
+  // returns a pair containing the calculated address and whether or not a page boundary
+  // was crossed while calculating that address
+  std::pair<std::uint16_t,bool> calculate_absolute_y_indexed_address()
+  {
+    return calculate_absolute_indexed_address(index_register_y_);
+  }
+
+  std::uint16_t calculate_immediate_address()
+  {
+    std::uint16_t result = program_counter_;
+    ++program_counter_;
+    return result;
+  }
+
+  std::uint16_t calculate_indexed_indirect_address()
+  {
+    // X + the immediate byte wraps around, so the initial address is one byte
+    std::uint8_t zero_page_address = index_register_x_ + read(program_counter_);
+    ++program_counter_;
+    std::uint8_t low_byte_of_result = read(zero_page_address);
+    ++zero_page_address;
+    // note that the address of the high byte may wrap around to the beginning of the zero page
+    std::uint8_t high_byte_of_result = read(zero_page_address);
+    return (high_byte_of_result << 8) + low_byte_of_result;
+  }
+
+  std::uint16_t calculate_indirect_address()
+  {
+    std::uint8_t low_byte_of_ptr = read(program_counter_);
+    ++program_counter_;
+    std::uint8_t high_byte_of_ptr = read(program_counter_);
+    ++program_counter_;
+
+    std::uint8_t low_byte_of_result = read((high_byte_of_ptr << 8) | low_byte_of_ptr);
+
+    // the 6502 has a bug that prevents this addition from crossing a page boundary
+    // IOW, adding 1 + 0x##FF wraps around to 0x##00
+    // we simulate this by simply incrementing the low byte of the pointer
+    ++low_byte_of_ptr;
+
+    std::uint8_t high_byte_of_result = read((high_byte_of_ptr << 8) | low_byte_of_ptr);
+
+    return (high_byte_of_result << 8) | low_byte_of_result;
+  }
+
+  // returns a pair containing the calculated address and whether or not a page boundary
+  // was crossed while calculating that address
+  std::pair<std::uint16_t,bool> calculate_indirect_indexed_address()
+  {
+    std::uint8_t zero_page_address = read(program_counter_);
+    ++program_counter_;
+    std::uint8_t low_byte_of_result = read(zero_page_address);
+    ++zero_page_address;
+
+    // note that the address of the high byte may wrap around to the beginning of the zero page
+    std::uint8_t high_byte_of_result = read(zero_page_address);
+
+    std::uint16_t result = (high_byte_of_result << 8) + low_byte_of_result;
+
+    // add in the value stored in Y
+    result += index_register_y_;
+
+    // check for crossing page boundary
+    bool page_boundary_crossed = (result >> 8) != high_byte_of_result;
+
+    return {result, page_boundary_crossed};
+  }
+
+  // returns a pair containing the calculated address and whether or not a page boundary
+  // was crossed while calculating that address
+  std::pair<std::uint16_t,bool> calculate_relative_address()
+  {
+    std::uint8_t data = read(program_counter_);
+    // the offset is interpreted as signed data
+    std::int8_t offset = *reinterpret_cast<std::int8_t*>(&data);
+    ++program_counter_;
+
+    std::uint8_t high_byte = program_counter_ >> 8;
+    std::uint16_t result = program_counter_ + offset;
+
+    // check for crossing page boundary
+    bool page_boundary_crossed = (result >> 8) != high_byte;
+
+    return {result, page_boundary_crossed};
+  }
+
+  std::uint16_t calculate_zero_page_address()
+  {
+    std::uint16_t result = read(program_counter_);
+    ++program_counter_;
+    return result;
+  }
+
+  std::uint16_t calculate_zero_page_x_indexed_address()
+  {
+    std::uint8_t result = read(program_counter_);
+    ++program_counter_;
+
+    // note that this addition may wrap around to the beginning of the zero page
+    result += index_register_x_;
+    return result;
+  }
+
+  std::uint16_t calculate_zero_page_y_indexed_address()
+  {
+    std::uint8_t result = read(program_counter_);
+    ++program_counter_;
+
+    // note that this addition may wrap around to the beginning of the zero page
+    result += index_register_y_;
+    return result;
+  }
+
+  // this function returns a pair containing the calculated address argument
+  // for the current instruction and whether or not the current instruction
+  // will consume an additional cycle
+  std::pair<uint16_t,bool> calculate_address(address_mode mode)
+  {
+    std::pair<uint16_t, bool> result{0, false};
 
     switch(mode)
     {
       case absolute:
       {
-        std::uint8_t low_byte = read(program_counter_);
-        ++program_counter_;
-        std::uint8_t high_byte = read(program_counter_);
-        ++program_counter_;
+        result.first = calculate_absolute_address();
+        break;
+      }
 
-        result = (high_byte << 8) | low_byte;
+      case absolute_x_indexed:
+      {
+        result = calculate_absolute_x_indexed_address();
+        break;
+      }
+
+      case absolute_y_indexed:
+      {
+        result = calculate_absolute_y_indexed_address();
         break;
       }
 
@@ -1831,8 +1806,7 @@ struct my_6502
 
       case immediate:
       {
-        result = program_counter_;
-        ++program_counter_;
+        result.first = calculate_immediate_address();
         break;
       }
 
@@ -1843,44 +1817,43 @@ struct my_6502
 
       case indexed_indirect:
       {
-        // X + the immediate byte wraps around, so the initial address is one byte
-        std::uint8_t zero_page_address = index_register_x_ + read(program_counter_);
-        ++program_counter_;
-        std::uint8_t low_byte_of_result = read(zero_page_address);
-        ++zero_page_address;
-        // note that the address of the high byte may wrap around to the beginning of the zero page
-        std::uint8_t high_byte_of_result = read(zero_page_address);
-        result = (high_byte_of_result << 8) + low_byte_of_result;
+        result.first = calculate_indexed_indirect_address();
+        break;
+      }
+
+      case indirect:
+      {
+        result.first = calculate_indirect_address();
         break;
       }
 
       case indirect_indexed:
       {
-        std::uint8_t zero_page_address = read(program_counter_);
-        ++program_counter_;
-        std::uint8_t low_byte_of_result = read(zero_page_address);
-        ++zero_page_address;
-        // note that the address of the high byte may wrap around to the beginning of the zero page
-        std::uint8_t high_byte_of_result = read(zero_page_address);
-        result = (high_byte_of_result << 8) + low_byte_of_result;
-
-        // add in the value stored in Y
-        result += index_register_y_;
+        result = calculate_indirect_indexed_address();
         break;
       }
 
       case relative:
       {
-        std::uint8_t offset = read(program_counter_);
-        ++program_counter_;
-        result = program_counter_ + offset;
+        result = calculate_relative_address();
         break;
       }
 
       case zero_page:
       {
-        result = read(program_counter_);
-        ++program_counter_;
+        result.first = calculate_zero_page_address();
+        break;
+      }
+
+      case zero_page_x_indexed:
+      {
+        result.first = calculate_zero_page_x_indexed_address();
+        break;
+      }
+
+      case zero_page_y_indexed:
+      {
+        result.first = calculate_zero_page_y_indexed_address();
         break;
       }
 
@@ -1895,333 +1868,432 @@ struct my_6502
 
   int execute(std::uint8_t opcode)
   {
-    int result = 0;
     address_mode mode = instruction_info_table[opcode].mode;
-    std::uint16_t address = calculate_address(mode);
+    auto [address, page_boundary_crossed] = calculate_address(mode);
+    bool branch_taken = false;
 
     switch(instruction_info_table[opcode].op)
     {
       case ADC:
       {
-        result = execute_add_with_carry(address, mode);
+        execute_add_with_carry(address);
         break;
       }
 
       case AND:
       {
-        result = execute_logical_and(address, mode);
+        execute_logical_and(address);
         break;
       }
 
       case ASL:
       {
-        result = (mode == accumulator) ? execute_arithmetic_shift_left_accumulator() : execute_arithmetic_shift_left(address, mode);
+        if(mode == accumulator)
+        {
+          execute_arithmetic_shift_left_accumulator();
+        }
+        else
+        {
+          execute_arithmetic_shift_left(address);
+        }
+
         break;
       }
 
       case BCC:
       {
-        result = execute_branch_if_carry_clear(address);
+        branch_taken = execute_branch_if_carry_clear(address);
         break;
       }
 
       case BCS:
       {
-        result = execute_branch_if_carry_set(address);
+        branch_taken = execute_branch_if_carry_set(address);
         break;
       }
 
       case BEQ:
       {
-        result = execute_branch_if_equal_to_zero(address);
+        branch_taken = execute_branch_if_equal_to_zero(address);
         break;
       }
 
       case BIT:
       {
-        result = execute_bit_test(address, mode);
+        execute_bit_test(address);
         break;
       }
 
       case BMI:
       {
-        result = execute_branch_if_minus(address);
+        branch_taken = execute_branch_if_minus(address);
         break;
       }
 
       case BNE:
       {
-        result = execute_branch_if_not_equal_to_zero(address);
+        branch_taken = execute_branch_if_not_equal_to_zero(address);
         break;
       }
 
       case BPL:
       {
-        result = execute_branch_if_positive(address);
+        branch_taken = execute_branch_if_positive(address);
         break;
       }
 
       case BVC:
       {
-        result = execute_branch_if_overflow_clear(address);
+        branch_taken = execute_branch_if_overflow_clear(address);
         break;
       }
 
       case BVS:
       {
-        result = execute_branch_if_overflow_set(address);
+        branch_taken = execute_branch_if_overflow_set(address);
         break;
       }
 
       case CLC:
       {
-        result = execute_clear_carry_flag();
+        execute_clear_carry_flag();
         break;
       }
 
       case CLD:
       {
-        result = execute_clear_decimal_mode_flag();
+        execute_clear_decimal_mode_flag();
         break;
       }
 
       case CLV:
       {
-        result = execute_clear_overflow_flag();
+        execute_clear_overflow_flag();
         break;
       }
 
       case CMP:
       {
-        result = execute_compare_accumulator(address, mode);
+        execute_compare_accumulator(address);
         break;
       }
 
       case CPX:
       {
-        result = execute_compare_index_register_x(address, mode);
+        execute_compare_index_register_x(address);
         break;
       }
 
       case CPY:
       {
-        result = execute_compare_index_register_y(address, mode);
+        execute_compare_index_register_y(address);
+        break;
+      }
+
+      case DCP:
+      {
+        execute_decrement_memory(address);
+        execute_compare_accumulator(address);
         break;
       }
 
       case DEC:
       {
-        result = execute_decrement_memory(address, mode);
+        execute_decrement_memory(address);
         break;
       }
 
       case DEX:
       {
-        result = execute_decrement_index_register_x();
+        execute_decrement_index_register_x();
         break;
       }
 
       case DEY:
       {
-        result = execute_decrement_index_register_y();
+        execute_decrement_index_register_y();
         break;
       }
 
       case EOR:
       {
-        result = execute_exclusive_or(address, mode);
+        execute_exclusive_or(address);
+        break;
+      }
+
+      case Illegal_NOP:
+      {
+        execute_no_operation();
+        break;
+      }
+
+      case Illegal_SBC:
+      {
+        execute_subtract_with_carry(address);
         break;
       }
 
       case INC:
       {
-        result = execute_increment_memory(address, mode);
+        execute_increment_memory(address);
         break;
       }
 
       case INX:
       {
-        result = execute_increment_index_register_x();
+        execute_increment_index_register_x();
         break;
       }
 
       case INY:
       {
-        result = execute_increment_index_register_y();
+        execute_increment_index_register_y();
+        break;
+      }
+
+      case ISC:
+      {
+        execute_increment_memory(address);
+        execute_subtract_with_carry(address);
         break;
       }
 
       case JMP:
       {
-        result = execute_jump(address);
+        execute_jump(address);
         break;
       }
 
       case JSR:
       {
-        result = execute_jump_to_subroutine(address);
+        execute_jump_to_subroutine(address);
+        break;
+      }
+
+      case LAX:
+      {
+        execute_load_accumulator(address);
+        execute_transfer_accumulator_to_index_register_x();
         break;
       }
 
       case LDA:
       {
-        result = execute_load_accumulator(address, mode);
+        execute_load_accumulator(address);
         break;
       }
 
       case LDX:
       {
-        result = execute_load_index_register_x(address, mode);
+        execute_load_index_register_x(address);
         break;
       }
 
       case LDY:
       {
-        result = execute_load_index_register_y(address, mode);
+        execute_load_index_register_y(address);
         break;
       }
 
       case LSR:
       {
-        result = (mode == accumulator) ? execute_logical_shift_right_accumulator() : execute_logical_shift_right(address, mode);
+        if(mode == accumulator)
+        {
+          execute_logical_shift_right_accumulator();
+        }
+        else
+        {
+          execute_logical_shift_right(address);
+        }
+
         break;
       }
 
       case NOP:
       {
-        result = execute_no_operation();
+        execute_no_operation();
         break;
       }
 
       case ORA:
       {
-        result = execute_logical_inclusive_or(address, mode);
+        execute_logical_inclusive_or(address);
         break;
       }
 
       case PHA:
       {
-        result = execute_push_accumulator();
+        execute_push_accumulator();
         break;
       }
 
       case PHP:
       {
-        result = execute_push_processor_status();
+        execute_push_processor_status();
         break;
       }
 
       case PLA:
       {
-        result = execute_pull_accumulator();
+        execute_pull_accumulator();
         break;
       }
 
       case PLP:
       {
-        result = execute_pull_processor_status();
+        execute_pull_processor_status();
+        break;
+      }
+
+      case RLA:
+      {
+        execute_rotate_left(address);
+        execute_logical_and(address);
         break;
       }
 
       case ROL:
       {
-        result = (mode == accumulator) ? execute_rotate_left_accumulator() : execute_rotate_left(address, mode);
+        if(mode == accumulator)
+        {
+          execute_rotate_left_accumulator();
+        }
+        else
+        {
+          execute_rotate_left(address);
+        }
+
         break;
       }
 
       case ROR:
       {
-        result = (mode == accumulator) ? execute_rotate_right_accumulator() : execute_rotate_right(address, mode);
+        if(mode == accumulator)
+        {
+          execute_rotate_right_accumulator();
+        }
+        else
+        {
+          execute_rotate_right(address);
+        }
+
+        break;
+      }
+
+      case RRA:
+      {
+        execute_rotate_right(address);
+        execute_add_with_carry(address);
         break;
       }
       
       case RTI:
       {
-        result = execute_return_from_interrupt();
+        execute_return_from_interrupt();
         break;
       }
 
       case RTS:
       {
-        result = execute_return_from_subroutine();
+        execute_return_from_subroutine();
+        break;
+      }
+
+      case SAX:
+      {
+        execute_store_logical_and_of_accumulator_and_index_register_x(address);
         break;
       }
 
       case SEC:
       {
-        result = execute_set_carry_flag();
+        execute_set_carry_flag();
         break;
       }
 
       case SED:
       {
-        result = execute_set_decimal_mode_flag();
+        execute_set_decimal_mode_flag();
         break;
       }
 
       case SEI:
       {
-        result = execute_set_interrupt_disable();
+        execute_set_interrupt_disable();
         break;
       }
 
       case SBC:
       {
-        result = execute_subtract_with_carry(address, mode);
+        execute_subtract_with_carry(address);
+        break;
+      }
+
+      case SLO:
+      {
+        execute_arithmetic_shift_left(address);
+        execute_logical_inclusive_or(address);
+        break;
+      }
+
+      case SRE:
+      {
+        execute_logical_shift_right(address);
+        execute_exclusive_or(address);
         break;
       }
 
       case STA:
       {
-        result = execute_store_accumulator(address, mode);
+        execute_store_accumulator(address);
         break;
       }
 
       case STX:
       {
-        result = execute_store_index_register_x(address, mode);
+        execute_store_index_register_x(address);
         break;
       }
 
       case STY:
       {
-        result = execute_store_index_register_y(address, mode);
+        execute_store_index_register_y(address);
         break;
       }
 
       case TAX:
       {
-        result = execute_transfer_accumulator_to_index_register_x();
+        execute_transfer_accumulator_to_index_register_x();
         break;
       }
 
       case TAY:
       {
-        result = execute_transfer_accumulator_to_index_register_y();
+        execute_transfer_accumulator_to_index_register_y();
         break;
       }
 
       case TSX:
       {
-        result = execute_transfer_stack_pointer_to_index_register_x();
+        execute_transfer_stack_pointer_to_index_register_x();
         break;
       }
 
       case TXA:
       {
-        result = execute_transfer_index_register_x_to_accumulator();
+        execute_transfer_index_register_x_to_accumulator();
         break;
       }
 
       case TXS:
       {
-        result = execute_transfer_index_register_x_to_stack_pointer();
+        execute_transfer_index_register_x_to_stack_pointer();
         break;
       }
 
       case TYA:
       {
-        result = execute_transfer_index_register_y_to_accumulator();
+        execute_transfer_index_register_y_to_accumulator();
         break;
       }
 
@@ -2233,7 +2305,7 @@ struct my_6502
       }
     }
 
-    return result;
+    return instruction_info_table[opcode].num_cycles + calculate_extra_cycles(opcode, page_boundary_crossed, branch_taken);
   }
 
   void log(int cycle) const
@@ -2277,7 +2349,14 @@ struct my_6502
     ppu.resize(30);
     snprintf(ppu.data(), ppu.size(), "PPU:%3d,%3d", 0, 0);
 
-    printf("%04X  %-8s  %-31s %s %s CYC:%d\n", program_counter_, instruction_words.data(), disassembly.c_str(), registers.c_str(), ppu.c_str(), cycle);
+    if(is_legal(i.opcode))
+    {
+      printf("%04X  %-8s  %-31s %s %s CYC:%d\n", program_counter_, instruction_words.data(), disassembly.c_str(), registers.c_str(), ppu.c_str(), cycle);
+    }
+    else
+    {
+      printf("%04X  %-8s *%-31s %s %s CYC:%d\n", program_counter_, instruction_words.data(), disassembly.c_str(), registers.c_str(), ppu.c_str(), cycle);
+    }
   }
 };
 
@@ -2298,6 +2377,10 @@ int main()
   // initialize the reset vector location
   memory[my_6502::reset_vector_location]     = 0x00;
   memory[my_6502::reset_vector_location + 1] = 0xC0;
+
+  // for now, just initialize APU memory locations to 0xFF
+  std::fill_n(memory.begin() + 0x4000, 0x18, 0xFF);
+  std::fill_n(memory.begin() + 0x4018, 0x08, 0xFF);
 
   // create a bus
   my_bus bus{memory.data()};
