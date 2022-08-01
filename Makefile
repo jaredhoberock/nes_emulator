@@ -1,4 +1,4 @@
-nes: bus.hpp cartridge.hpp main.cpp mos6502.hpp
+nes: bus.hpp cartridge.hpp main.cpp mos6502.hpp system.hpp
 	clang -std=c++20 -Wall -Wextra main.cpp -lstdc++ -lfmt -o nes
 
 IMGUI_DIR = ../imgui
