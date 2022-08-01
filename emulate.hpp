@@ -3,7 +3,7 @@
 #include <iostream>
 
 
-inline void simulate(class system& sys, std::atomic<bool>& cancelled, std::atomic<bool>& paused, std::ostream& cpu_log, std::ostream& error_log)
+inline void emulate(class system& sys, std::atomic<bool>& cancelled, std::atomic<bool>& paused, std::ostream& cpu_log, std::ostream& error_log)
 {
   // reset the cpu
   int cycle = sys.cpu().reset();
@@ -24,7 +24,7 @@ inline void simulate(class system& sys, std::atomic<bool>& cancelled, std::atomi
   }
   catch(std::exception& e)
   {
-    error_log << "simulate: Caught exception: " << e.what() << std::endl;
+    error_log << "emulate: Caught exception: " << e.what() << std::endl;
   }
 }
 

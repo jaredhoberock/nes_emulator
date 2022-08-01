@@ -3,15 +3,15 @@
 // If you are new to Dear ImGui, read documentation from the docs/ folder + read the top of imgui.cpp.
 // Read online: https://github.com/ocornut/imgui/tree/master/docs
 
-#include <future>
+#include "emulate.hpp"
 #include "gui.hpp"
 #include "imgui.h"
 #include "imgui_impl_sdl.h"
 #include "imgui_impl_opengl3.h"
-#include "simulate.hpp"
 #include <atomic>
 #include <chrono>
 #include <fmt/format.h>
+#include <future>
 #include <iostream>
 #include <stdio.h>
 #include <string>
@@ -159,9 +159,9 @@ int gui(class system& sys)
   bool show_log_window = true;
   ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-  std::atomic<bool> simulation_cancelled = false;
-  std::atomic<bool> simulation_paused = true;
-  std::future<void> simulation = make_ready_future();
+  std::atomic<bool> emulation_cancelled = false;
+  std::atomic<bool> emulation_paused = true;
+  std::future<void> emulation = make_ready_future();
 
   // Main loop
   bool done = false;
@@ -193,26 +193,26 @@ int gui(class system& sys)
     ImGui::NewFrame();
 
     // draw a start/pause button
-    ImGui::Begin("Simulation");
-    if(is_complete(simulation))
+    ImGui::Begin("Emulation");
+    if(is_complete(emulation))
     {
-      if(ImGui::Button("Simulate"))
+      if(ImGui::Button("Emulate"))
       {
-        simulation_paused = false;
-        simulation_cancelled = false;
-        simulation = std::async([&]
+        emulation_paused = false;
+        emulation_cancelled = false;
+        emulation = std::async([&]
         {
-          simulate(sys, simulation_cancelled, simulation_paused, std::cout, std::cerr);
+          emulate(sys, emulation_cancelled, emulation_paused, std::cout, std::cerr);
         });
       }
     }
     else
     {
-      const char* text = simulation_paused ? "Unpause simulation" : "Pause simulation";
+      const char* text = emulation_paused ? "Unpause emulation" : "Pause emulation";
       if(ImGui::Button(text))
       {
-        simulation_paused = !simulation_paused;
-        simulation_paused.notify_all();
+        emulation_paused = !emulation_paused;
+        emulation_paused.notify_all();
       }
     }
     ImGui::End();
@@ -232,14 +232,14 @@ int gui(class system& sys)
     SDL_GL_SwapWindow(window);
   }
 
-  // end and join with the simulation thread
-  simulation_paused = false;
-  simulation_paused.notify_all();
-  simulation_cancelled = true;
-  simulation_cancelled.notify_all();
-  if(simulation.valid())
+  // end and join with the emulation thread
+  emulation_paused = false;
+  emulation_paused.notify_all();
+  emulation_cancelled = true;
+  emulation_cancelled.notify_all();
+  if(emulation.valid())
   {
-    simulation.wait();
+    emulation.wait();
   }
   
   // Cleanup
