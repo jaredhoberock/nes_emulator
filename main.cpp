@@ -539,7 +539,7 @@ struct my_6502
   }
 
   // program_counter is the pc of instruction i
-  // this function exists for disassemble's benefit
+  // this function exists for nestest_log's benefit
   std::uint16_t calculate_address(std::uint16_t program_counter, instruction i) const
   {
     std::uint16_t result = 0;
@@ -672,7 +672,7 @@ struct my_6502
     return result;
   }
 
-  std::string disassemble(instruction i) const
+  std::string nestest_instruction_log(instruction i) const
   {
     std::string arg;
 
@@ -759,7 +759,7 @@ struct my_6502
 
       default:
       {
-        throw std::runtime_error("disassemble: Unimplemented address mode");
+        throw std::runtime_error("nestest_instruction_log: Unimplemented address mode");
       }
     }
 
@@ -820,7 +820,6 @@ struct my_6502
 
           case indexed_indirect:
           {
-            // XXX this is weird because the disassembly uses the state of the memory
             std::uint8_t x_plus_immediate = index_register_x_ + i.byte1;
             std::uint16_t address = calculate_address(program_counter_, i);
             std::uint8_t data = read(address);
@@ -837,7 +836,6 @@ struct my_6502
 
           case indirect_indexed:
           {
-            // XXX this is weird because the disassembly uses the state of the memory
             std::uint8_t zero_page_address = i.byte1;
             std::uint8_t low_byte_of_address = read(zero_page_address);
             ++zero_page_address;
@@ -870,7 +868,6 @@ struct my_6502
 
             std::uint16_t address = calculate_address(program_counter_, i);
 
-            // XXX this is weird because the disassembly uses the state of the memory
             std::uint8_t data = read(address);
             embellishment = fmt::format(" = {:02X}", data);
             break;
@@ -2356,18 +2353,18 @@ struct my_6502
       }
     }
 
-    std::string disassembly = disassemble(i);
+    std::string instruction_log = nestest_instruction_log(i);
     std::string registers = fmt::format("A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}", accumulator_, index_register_x_, index_register_y_, status_flags_as_byte(), stack_pointer_);
     std::string ppu = fmt::format("PPU:{:3d},{:3d}", 0, 0);
 
     if(is_legal(i.opcode))
     {
-      fmt::print(std::cout, "{:04X}  {:<8}  {:<31} {} {} CYC:{}\n", program_counter_, instruction_words, disassembly, registers, ppu, cycle);
+      fmt::print(std::cout, "{:04X}  {:<8}  {:<31} {} {} CYC:{}\n", program_counter_, instruction_words, instruction_log, registers, ppu, cycle);
     }
     else
     {
       // denote illegal operations with a *
-      fmt::print(std::cout, "{:04X}  {:<8} *{:<31} {} {} CYC:{}\n", program_counter_, instruction_words, disassembly, registers, ppu, cycle);
+      fmt::print(std::cout, "{:04X}  {:<8} *{:<31} {} {} CYC:{}\n", program_counter_, instruction_words, instruction_log, registers, ppu, cycle);
     }
   }
 };
