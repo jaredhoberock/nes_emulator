@@ -3,16 +3,35 @@
 // If you are new to Dear ImGui, read documentation from the docs/ folder + read the top of imgui.cpp.
 // Read online: https://github.com/ocornut/imgui/tree/master/docs
 
+#include <future>
+#include "gui.hpp"
 #include "imgui.h"
 #include "imgui_impl_sdl.h"
 #include "imgui_impl_opengl3.h"
+#include "simulate.hpp"
+#include <atomic>
+#include <chrono>
 #include <fmt/format.h>
 #include <iostream>
 #include <stdio.h>
 #include <string>
+#include <tuple>
 #include <SDL.h>
 #include <SDL_opengl.h>
-#include <tuple>
+
+
+std::future<void> make_ready_future()
+{
+  std::promise<void> p;
+  p.set_value();
+  return p.get_future();
+}
+
+
+bool is_complete(std::future<void>& f)
+{
+  return f.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+}
 
 
 struct log_window
@@ -120,7 +139,7 @@ void destroy_window(SDL_Window* window, SDL_GLContext context)
 }
 
 
-int gui()
+int gui(class system& sys)
 {
   auto [glsl_version, window, gl_context] = create_window();
 
@@ -139,7 +158,11 @@ int gui()
   // Our state
   bool show_log_window = true;
   ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
-  
+
+  std::atomic<bool> simulation_cancelled = false;
+  std::atomic<bool> simulation_paused = true;
+  std::future<void> simulation = make_ready_future();
+
   // Main loop
   bool done = false;
   while(!done)
@@ -168,7 +191,32 @@ int gui()
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL2_NewFrame();
     ImGui::NewFrame();
-    
+
+    // draw a start/pause button
+    ImGui::Begin("Simulation");
+    if(is_complete(simulation))
+    {
+      if(ImGui::Button("Simulate"))
+      {
+        simulation_paused = false;
+        simulation_cancelled = false;
+        simulation = std::async([&]
+        {
+          simulate(sys, simulation_cancelled, simulation_paused, std::cout, std::cerr);
+        });
+      }
+    }
+    else
+    {
+      const char* text = simulation_paused ? "Unpause simulation" : "Pause simulation";
+      if(ImGui::Button(text))
+      {
+        simulation_paused = !simulation_paused;
+        simulation_paused.notify_all();
+      }
+    }
+    ImGui::End();
+
     // show a log window
     if(show_log_window)
     {
@@ -182,6 +230,16 @@ int gui()
     glClear(GL_COLOR_BUFFER_BIT);
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     SDL_GL_SwapWindow(window);
+  }
+
+  // end and join with the simulation thread
+  simulation_paused = false;
+  simulation_paused.notify_all();
+  simulation_cancelled = true;
+  simulation_cancelled.notify_all();
+  if(simulation.valid())
+  {
+    simulation.wait();
   }
   
   // Cleanup

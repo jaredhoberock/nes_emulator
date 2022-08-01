@@ -20,7 +20,7 @@ gui.o:gui.cpp gui.hpp
 	clang -std=c++20 -Wall -Wextra $(IMGUI_CFLAGS) -c -o $@ $<
 
 app:app.o gui.o $(IMGUI_OBJS)
-	clang -o $@ $^ $(IMGUI_LIBS) -lstdc++ -lfmt
+	clang -o $@ $^ $(IMGUI_LIBS) -lstdc++ -lfmt -lpthread
 
 clean:
 	rm -rf *.o nes app
