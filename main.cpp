@@ -2322,6 +2322,17 @@ struct my_6502
     return instruction_info_table[opcode].num_cycles + calculate_extra_cycles(opcode, page_boundary_crossed, branch_taken);
   }
 
+  // executes the next instruction and returns the numbers of cycles consumed
+  int step_instruction()
+  {
+    // read opcode
+    std::uint8_t opcode = read(program_counter_);
+    program_counter_++;
+
+    // execute instruction
+    return execute(opcode);
+  }
+
   void log(std::ostream& os, int cycle) const
   {
     instruction i = read_current_instruction();
@@ -2392,12 +2403,8 @@ int main()
       // log current state
       cpu.log(std::cout, cycle);
   
-      // read opcode
-      std::uint8_t opcode = cpu.read(cpu.program_counter_);
-      cpu.program_counter_++;
-
-      // execute instruction
-      cycle += cpu.execute(opcode);
+      // execute the next instruction
+      cycle += cpu.step_instruction();
     }
   }
   catch(std::exception& e)
