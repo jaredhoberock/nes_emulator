@@ -2322,7 +2322,7 @@ struct my_6502
     return instruction_info_table[opcode].num_cycles + calculate_extra_cycles(opcode, page_boundary_crossed, branch_taken);
   }
 
-  void log(int cycle) const
+  void log(std::ostream& os, int cycle) const
   {
     instruction i = read_current_instruction();
 
@@ -2359,12 +2359,12 @@ struct my_6502
 
     if(is_legal(i.opcode))
     {
-      fmt::print(std::cout, "{:04X}  {:<8}  {:<31} {} {} CYC:{}\n", program_counter_, instruction_words, instruction_log, registers, ppu, cycle);
+      fmt::print(os, "{:04X}  {:<8}  {:<31} {} {} CYC:{}\n", program_counter_, instruction_words, instruction_log, registers, ppu, cycle);
     }
     else
     {
       // denote illegal operations with a *
-      fmt::print(std::cout, "{:04X}  {:<8} *{:<31} {} {} CYC:{}\n", program_counter_, instruction_words, instruction_log, registers, ppu, cycle);
+      fmt::print(os, "{:04X}  {:<8} *{:<31} {} {} CYC:{}\n", program_counter_, instruction_words, instruction_log, registers, ppu, cycle);
     }
   }
 };
@@ -2390,7 +2390,7 @@ int main()
     while(true)
     {
       // log current state
-      cpu.log(cycle);
+      cpu.log(std::cout, cycle);
   
       // read opcode
       std::uint8_t opcode = cpu.read(cpu.program_counter_);
