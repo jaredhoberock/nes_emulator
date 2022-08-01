@@ -32,7 +32,7 @@ enum address_mode
 };
 
 
-int calculate_extra_cycles(std::uint8_t opcode, bool page_boundary_crossed, bool branch_taken)
+inline int calculate_extra_cycles(std::uint8_t opcode, bool page_boundary_crossed, bool branch_taken)
 {
   int result = 0;
 
@@ -108,7 +108,7 @@ struct instruction_info
 };
 
 
-std::array<instruction_info,256> initialize_instruction_info_table()
+constexpr std::array<instruction_info,256> initialize_instruction_info_table()
 {
   std::array<instruction_info,256> result = {};
 
@@ -342,17 +342,6 @@ std::array<instruction_info,256> initialize_instruction_info_table()
   return result;
 }
 
-// XXX make this a static class member
-std::array<instruction_info,256> instruction_info_table = initialize_instruction_info_table();
-
-
-bool is_legal(std::uint8_t opcode)
-{
-  return instruction_info_table[opcode].op < DCP;
-}
-
-
-
 
 struct mos6502
 {
@@ -362,6 +351,8 @@ struct mos6502
   static constexpr std::uint8_t  initial_accumulator_value = 0x00;
   static constexpr std::uint8_t  initial_index_register_x_value = 0x00;
   static constexpr std::uint8_t  initial_index_register_y_value = 0x00;
+
+  static constexpr std::array<instruction_info,256> instruction_info_table = initialize_instruction_info_table();
 
   struct instruction
   {
@@ -411,6 +402,13 @@ struct mos6502
       return result;
     }
   };
+
+
+  constexpr static bool is_legal(std::uint8_t opcode)
+  {
+    return instruction_info_table[opcode].op < DCP;
+  }
+
 
   // state
   std::uint16_t program_counter_;
