@@ -14,7 +14,7 @@ inline void emulate(class system& sys, std::atomic<bool>& cancelled, std::atomic
 
   int ppu_cycle = 0;
   int cpu_cycle = sys.cpu().reset();
-  for(int i = 0; i < cpu_cycle; ++i)
+  for(int i = 0; i < 3 * cpu_cycle; ++i)
   {
     sys.ppu().step_pixel();
     ++ppu_cycle;
@@ -34,7 +34,7 @@ inline void emulate(class system& sys, std::atomic<bool>& cancelled, std::atomic
       int num_cpu_cycles = sys.cpu().step_instruction();
 
       // let the ppu catch up to the cpu
-      for(int i = 0; i < num_cpu_cycles; ++i)
+      for(int i = 0; i < 3 * num_cpu_cycles; ++i)
       {
         sys.ppu().step_pixel();
         ++ppu_cycle;
