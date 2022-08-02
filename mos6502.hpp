@@ -2254,7 +2254,7 @@ struct mos6502
     return execute(opcode);
   }
 
-  void log(std::ostream& os, int cycle) const
+  void log(std::ostream& os, int cpu_cycle, int ppu_cycle) const
   {
     instruction i = read_current_instruction();
 
@@ -2287,16 +2287,16 @@ struct mos6502
 
     std::string instruction_log = nestest_instruction_log(i);
     std::string registers = fmt::format("A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}", accumulator_, index_register_x_, index_register_y_, status_flags_as_byte(), stack_pointer_);
-    std::string ppu = fmt::format("PPU:{:3d},{:3d}", 0, 0);
+    std::string ppu = fmt::format("PPU:{:3d},{:3d}", ppu_cycle / 341, ppu_cycle % 341);
 
     if(is_legal(i.opcode))
     {
-      fmt::print(os, "{:04X}  {:<8}  {:<31} {} {} CYC:{}\n", program_counter_, instruction_words, instruction_log, registers, ppu, cycle);
+      fmt::print(os, "{:04X}  {:<8}  {:<31} {} {} CYC:{}\n", program_counter_, instruction_words, instruction_log, registers, ppu, cpu_cycle);
     }
     else
     {
       // denote illegal operations with a *
-      fmt::print(os, "{:04X}  {:<8} *{:<31} {} {} CYC:{}\n", program_counter_, instruction_words, instruction_log, registers, ppu, cycle);
+      fmt::print(os, "{:04X}  {:<8} *{:<31} {} {} CYC:{}\n", program_counter_, instruction_words, instruction_log, registers, ppu, cpu_cycle);
     }
   }
 };

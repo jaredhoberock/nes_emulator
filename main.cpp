@@ -24,7 +24,7 @@ int main()
     while(true)
     {
       // log current state
-      sys.cpu().log(std::cout, cycle);
+      sys.cpu().log(std::cout, cycle, 3 * cycle);
   
       // execute the next instruction
       cycle += sys.cpu().step_instruction();

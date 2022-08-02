@@ -20,6 +20,15 @@
 #include <SDL_opengl.h>
 
 
+struct null_buffer : std::streambuf
+{
+  int overflow(int c) { return c; };
+};
+
+null_buffer nb;
+std::ostream null_stream{&nb};
+
+
 std::future<void> make_ready_future()
 {
   std::promise<void> p;
@@ -254,8 +263,7 @@ int gui(class system& sys)
         emulation_cancelled = false;
         emulation = std::async([&]
         {
-          //emulate(sys, emulation_cancelled, emulation_paused, std::cout, std::cerr);
-          new_emulate(sys, emulation_cancelled, emulation_paused, std::cout, std::cerr);
+          emulate(sys, emulation_cancelled, emulation_paused, std::cout, std::cerr);
         });
       }
     }
@@ -277,7 +285,6 @@ int gui(class system& sys)
     }
 
     // draw the current framebuffer
-    // XXX should we read from the framebuffer while the ppu is writing?
     framebuffer.draw(sys);
     
     // Rendering
