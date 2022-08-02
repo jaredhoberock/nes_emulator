@@ -263,7 +263,7 @@ int gui(class system& sys)
         emulation_cancelled = false;
         emulation = std::async([&]
         {
-          emulate(sys, emulation_cancelled, emulation_paused, std::cout, std::cerr);
+          emulate(sys, emulation_cancelled, emulation_paused, null_stream, std::cerr);
         });
       }
     }
