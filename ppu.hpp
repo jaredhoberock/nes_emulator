@@ -27,6 +27,15 @@ class ppu
       }
     }
 
+    inline std::uint8_t read_register(std::uint16_t) const
+    {
+      return 0;
+    }
+
+    inline void write_register(std::uint16_t, std::uint8_t)
+    {
+    }
+
     const rgb* framebuffer_data() const
     {
       return framebuffer_.data();

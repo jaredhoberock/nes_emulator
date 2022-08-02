@@ -9,11 +9,12 @@ class system
 {
   public:
     system(const char* rom_filename)
-      : bus_{{}, cartridge{rom_filename}},
-        cpu_{bus_}
+      : cpu_{bus_},
+        ppu_{},
+        bus_{cartridge{rom_filename}, ppu_}
     {}
 
-    inline struct bus& bus()
+    inline class bus& bus()
     {
       return bus_;
     }
@@ -34,8 +35,8 @@ class system
     }
 
   private:
-    struct bus bus_;
     mos6502 cpu_;
     class ppu ppu_;
+    class bus bus_;
 };
 
