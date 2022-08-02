@@ -3,6 +3,7 @@
 #include "bus.hpp"
 #include "cartridge.hpp"
 #include "mos6502.hpp"
+#include "ppu.hpp"
 
 class system
 {
@@ -22,8 +23,19 @@ class system
       return cpu_;
     }
 
+    inline const ppu& ppu() const
+    {
+      return ppu_;
+    }
+
+    inline class ppu& ppu()
+    {
+      return ppu_;
+    }
+
   private:
     struct bus bus_;
     mos6502 cpu_;
+    class ppu ppu_;
 };
 
