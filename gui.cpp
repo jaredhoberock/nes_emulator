@@ -34,6 +34,57 @@ bool is_complete(std::future<void>& f)
 }
 
 
+class nes_framebuffer_window
+{
+  private:
+    const int width_ = ppu::framebuffer_width;
+    const int height_ = ppu::framebuffer_height;
+    const ImGuiWindowFlags window_flags_ = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_AlwaysAutoResize;
+    GLuint texture_;
+
+  public:
+    nes_framebuffer_window()
+      : texture_{}
+    {
+      glGenTextures(1, &texture_);
+      glBindTexture(GL_TEXTURE_2D, texture_);
+
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width_, height_, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+      
+      if(glGetError())
+      {
+        throw std::runtime_error("nes_framebuffer_window: GL error after glTexImage2D");
+      }
+    }
+
+    ~nes_framebuffer_window()
+    {
+      glDeleteTextures(1, &texture_);
+    }
+
+    void draw(const class system& sys) const
+    {
+      // copy the current state of the framebuffer into our texture
+      glBindTexture(GL_TEXTURE_2D, texture_);
+      glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width_, height_, GL_RGB, GL_UNSIGNED_BYTE, sys.ppu().framebuffer_data());
+      if(glGetError())
+      {
+        throw std::runtime_error(fmt::format("nes_framebuffer_window: GL error after glCopyTexImage2D"));
+      }
+
+      // draw a window
+      ImGui::Begin("Framebuffer", nullptr, window_flags_);
+      ImGui::Image(reinterpret_cast<void*>(texture_), ImVec2(2 * width_, 2 * height_), ImVec2(0,0), ImVec2(1,1));
+      ImGui::End();
+    }
+};
+
+
 struct log_window
 {
   std::string buffer_;
@@ -157,6 +208,7 @@ int gui(class system& sys)
   
   // Our state
   bool show_log_window = true;
+  nes_framebuffer_window framebuffer;
   ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
   std::atomic<bool> emulation_cancelled = false;
@@ -202,13 +254,14 @@ int gui(class system& sys)
         emulation_cancelled = false;
         emulation = std::async([&]
         {
-          emulate(sys, emulation_cancelled, emulation_paused, std::cout, std::cerr);
+          //emulate(sys, emulation_cancelled, emulation_paused, std::cout, std::cerr);
+          new_emulate(sys, emulation_cancelled, emulation_paused, std::cout, std::cerr);
         });
       }
     }
     else
     {
-      const char* text = emulation_paused ? "Unpause emulation" : "Pause emulation";
+      const char* text = emulation_paused ? "Continue" : "Pause";
       if(ImGui::Button(text))
       {
         emulation_paused = !emulation_paused;
@@ -222,6 +275,10 @@ int gui(class system& sys)
     {
       draw_log_window(&show_log_window);
     }
+
+    // draw the current framebuffer
+    // XXX should we read from the framebuffer while the ppu is writing?
+    framebuffer.draw(sys);
     
     // Rendering
     ImGui::Render();
