@@ -38,6 +38,16 @@ class nrom
 
       return result;
     }
+
+    inline std::uint16_t map_graphics(std::uint16_t address) const
+    {
+      if(address < 0x8000)
+      {
+        throw std::runtime_error("nrom::map: Bad address");
+      }
+
+      return address;
+    }
 };
 
 
@@ -134,6 +144,11 @@ class cartridge
       {
         throw std::runtime_error("cartridge::write: Bad address");
       }
+    }
+
+    inline std::uint8_t graphics_read(std::uint16_t address) const
+    {
+      return chr_memory_[mapper_.map_graphics(address)];
     }
 };
 

@@ -2,6 +2,7 @@
 
 #include "bus.hpp"
 #include "cartridge.hpp"
+#include "graphics_bus.hpp"
 #include "mos6502.hpp"
 #include "ppu.hpp"
 
@@ -11,13 +12,10 @@ class system
     system(const char* rom_filename)
       : cpu_{bus_},
         ppu_{},
-        bus_{cartridge{rom_filename}, ppu_}
+        cart_{rom_filename},
+        bus_{cart_, ppu_},
+        graphics_bus_{cart_}
     {}
-
-    inline class bus& bus()
-    {
-      return bus_;
-    }
 
     inline mos6502& cpu()
     {
@@ -34,9 +32,21 @@ class system
       return ppu_;
     }
 
+    inline class bus& bus()
+    {
+      return bus_;
+    }
+
+    inline class graphics_bus& graphics_bus()
+    {
+      return graphics_bus_;
+    }
+
   private:
     mos6502 cpu_;
     class ppu ppu_;
+    cartridge cart_;
     class bus bus_;
+    class graphics_bus graphics_bus_;
 };
 

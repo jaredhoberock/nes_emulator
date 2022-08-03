@@ -16,7 +16,16 @@ class ppu
 
     ppu()
       : current_scanline_{0},
-        current_column_{0}
+        current_column_{0},
+        control_register_{},
+        mask_register_{},
+        status_register_{},
+        oam_memory_address_register_{},
+        oam_memory_data_register_{},
+        scroll_register_{},
+        address_register_{},
+        data_register_buffer_{},
+        address_latch_{}
     {
       for(int row = 0; row < framebuffer_height; ++row)
       {
@@ -27,20 +36,121 @@ class ppu
       }
     }
 
-    inline std::uint8_t read_register(std::uint16_t) const
+    inline std::uint8_t control_register() const
     {
-      return 0;
+      return control_register_.reg;
     }
 
-    inline void write_register(std::uint16_t, std::uint8_t)
+    inline void set_control_register(std::uint8_t value)
     {
+      control_register_.reg = value;
     }
 
-    const rgb* framebuffer_data() const
+    inline std::uint8_t mask_register() const
+    {
+      return mask_register_.reg;
+    }
+
+    inline void set_mask_register(std::uint8_t value)
+    {
+      mask_register_.reg = value;
+    }
+
+    inline std::uint8_t status_register()
+    {
+      // XXX hack this in to see if nestest makes progress
+      status_register_.vertical_blank_started = true;
+
+      // the lower bytes of the status register often include bits from the last value of the data register
+      std::uint8_t result = (status_register_.reg & 0xE0) | (data_register_buffer_ & 0x1F);
+
+      // reading the status register clears the vertical blank bit
+      status_register_.vertical_blank_started = false;
+
+      // reading the status register also clears the address latch
+      address_latch_ = false;
+
+      return result;
+    }
+
+    inline std::uint8_t oam_memory_address_register() const
+    {
+      return oam_memory_address_register_;
+    }
+
+    inline void set_oam_memory_address_register(std::uint8_t value)
+    {
+      oam_memory_address_register_ = value;
+    }
+
+    inline std::uint8_t oam_memory_data_register() const
+    {
+      return oam_memory_data_register_;
+    }
+
+    inline void set_oam_memory_data_register(std::uint8_t value)
+    {
+      oam_memory_data_register_ = value;
+    }
+
+    inline std::uint8_t scroll_register() const
+    {
+      return scroll_register_;
+    }
+
+    inline void set_scroll_register(std::uint8_t value)
+    {
+      scroll_register_ = value;
+    }
+
+    inline void set_address_register(std::uint8_t value)
+    {
+      if(address_latch_)
+      {
+        // write to high byte
+        address_register_ = (value << 8) | (address_register_ & 0x00FF);
+      }
+      else
+      {
+        // write to low byte
+        address_register_ = (address_register_ & 0xFF00) | value;
+      }
+
+      address_latch_ = !address_latch_;
+    }
+
+    inline std::uint8_t data_register()
+    {
+      std::uint8_t result = read(address_register_);
+
+      // increment address register
+      address_register_ += control_register_.vram_address_increment_mode ? 32 : 1;
+
+      // reads are delayed by one read in this range
+      if(address_register_ < 0x3F00)
+      {
+        std::swap(result, data_register_buffer_);
+      }
+
+      return result;
+    }
+
+    inline void set_data_register(std::uint8_t value)
+    {
+      data_register_ = value;
+    }
+
+    inline const rgb* framebuffer_data() const
     {
       return framebuffer_.data();
     }
 
+    inline std::uint8_t read(std::uint16_t) const
+    {
+      return 0;
+    }
+
+    // XXX this should be named step_cycle
     inline void step_pixel()
     {
       framebuffer_[current_scanline_ * framebuffer_width + current_column_] = random_rgb();
@@ -70,5 +180,61 @@ class ppu
       std::uint8_t b = (char)rand();
       return {r,g,b};
     }
+
+    union
+    {
+      std::uint8_t reg;
+      struct
+      {
+        bool nametable_x : 1;
+        bool nametable_2 : 1;
+        bool vram_address_increment_mode : 1;
+        bool sprite_pattern_table_address : 1;
+        bool background_pattern_table_address : 1;
+        bool sprite_size : 1;
+        bool ppu_master_slave_select : 1;
+        bool generate_nmi : 1;
+      };
+    } control_register_;
+
+    union
+    {
+      std::uint8_t reg;
+      struct
+      {
+        bool greyscale : 1;
+        bool show_background_in_leftmost_8_pixels_of_screen : 1;
+        bool show_sprites_in_leftmost_8_pixels_of_screen : 1;
+        bool show_background : 1;
+        bool show_sprites : 1;
+        bool emphasize_red : 1;
+        bool emphasize_green : 1;
+        bool emphasize_blue : 1;
+      };
+    } mask_register_;
+
+    union
+    {
+      std::uint8_t reg;
+      struct
+      {
+        int  unused : 5;
+        bool sprite_overflow : 1;
+        bool sprite_0_hit : 1;
+        bool vertical_blank_started : 1;
+      };
+    } status_register_;
+
+    // register state
+    std::uint8_t  oam_memory_address_register_;
+    std::uint8_t  oam_memory_data_register_;
+    std::uint8_t  scroll_register_;
+    std::uint16_t address_register_;
+    std::uint8_t  data_register_;
+
+    std::uint8_t data_register_buffer_;
+
+    // this indicates whether we're writing to the low or high byte of address_register_
+    bool address_latch_;
 };
 
