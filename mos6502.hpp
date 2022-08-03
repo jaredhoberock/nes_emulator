@@ -687,126 +687,127 @@ struct mos6502
     }
 
     // some instructions on memory need to be embellished with the current content of the memory location 
-    std::string embellishment;
+    // XXX reading memory-mapped PPU registers mutates the state of the PPU, so disable embellishment for now
+    //std::string embellishment;
 
-    switch(info.op)
-    {
-      case ADC:
-      case AND:
-      case ASL:
-      case BIT:
-      case CMP:
-      case CPX:
-      case CPY:
-      case DCP:
-      case DEC:
-      case EOR:
-      case Illegal_NOP:
-      case Illegal_SBC:
-      case INC:
-      case ISC:
-      case JMP:
-      case LAX:
-      case LDA:
-      case LDX:
-      case LDY:
-      case LSR:
-      case ORA:
-      case ROL:
-      case ROR:
-      case RLA:
-      case RRA:
-      case SAX:
-      case SBC:
-      case SLO:
-      case SRE:
-      case STA:
-      case STX:
-      case STY:
-      {
-        // instructions with certain kinds of address mode need no embellishment
-        if(info.mode == immediate or info.mode == accumulator or info.mode == relative)
-        {
-          break;
-        }
+    //switch(info.op)
+    //{
+    //  case ADC:
+    //  case AND:
+    //  case ASL:
+    //  case BIT:
+    //  case CMP:
+    //  case CPX:
+    //  case CPY:
+    //  case DCP:
+    //  case DEC:
+    //  case EOR:
+    //  case Illegal_NOP:
+    //  case Illegal_SBC:
+    //  case INC:
+    //  case ISC:
+    //  case JMP:
+    //  case LAX:
+    //  case LDA:
+    //  case LDX:
+    //  case LDY:
+    //  case LSR:
+    //  case ORA:
+    //  case ROL:
+    //  case ROR:
+    //  case RLA:
+    //  case RRA:
+    //  case SAX:
+    //  case SBC:
+    //  case SLO:
+    //  case SRE:
+    //  case STA:
+    //  case STX:
+    //  case STY:
+    //  {
+    //    // instructions with certain kinds of address mode need no embellishment
+    //    if(info.mode == immediate or info.mode == accumulator or info.mode == relative)
+    //    {
+    //      break;
+    //    }
 
-        switch(info.mode)
-        {
-          case absolute_x_indexed:
-          case absolute_y_indexed:
-          {
-            std::uint16_t address = calculate_address(program_counter_, i);
-            std::uint8_t data = read(address);
-            embellishment = fmt::format(" @ {:04X} = {:02X}", address, data);
-            break;
-          }
+    //    switch(info.mode)
+    //    {
+    //      case absolute_x_indexed:
+    //      case absolute_y_indexed:
+    //      {
+    //        std::uint16_t address = calculate_address(program_counter_, i);
+    //        std::uint8_t data = read(address);
+    //        embellishment = fmt::format(" @ {:04X} = {:02X}", address, data);
+    //        break;
+    //      }
 
-          case indexed_indirect:
-          {
-            std::uint8_t x_plus_immediate = index_register_x_ + i.byte1;
-            std::uint16_t address = calculate_address(program_counter_, i);
-            std::uint8_t data = read(address);
-            embellishment = fmt::format(" @ {:02X} = {:04X} = {:02X}", x_plus_immediate, address, data);
-            break;
-          }
+    //      case indexed_indirect:
+    //      {
+    //        std::uint8_t x_plus_immediate = index_register_x_ + i.byte1;
+    //        std::uint16_t address = calculate_address(program_counter_, i);
+    //        std::uint8_t data = read(address);
+    //        embellishment = fmt::format(" @ {:02X} = {:04X} = {:02X}", x_plus_immediate, address, data);
+    //        break;
+    //      }
 
-          case indirect:
-          {
-            std::uint16_t address = calculate_address(program_counter_, i);
-            embellishment = fmt::format(" = {:04X}", address);
-            break;
-          }
+    //      case indirect:
+    //      {
+    //        std::uint16_t address = calculate_address(program_counter_, i);
+    //        embellishment = fmt::format(" = {:04X}", address);
+    //        break;
+    //      }
 
-          case indirect_indexed:
-          {
-            std::uint8_t zero_page_address = i.byte1;
-            std::uint8_t low_byte_of_address = read(zero_page_address);
-            ++zero_page_address;
-            // note that the address of the high byte may wrap around to the beginning of the zero page
-            std::uint8_t high_byte_of_address = read(zero_page_address);
-            std::uint16_t address_in_table = (high_byte_of_address << 8) + low_byte_of_address;
+    //      case indirect_indexed:
+    //      {
+    //        std::uint8_t zero_page_address = i.byte1;
+    //        std::uint8_t low_byte_of_address = read(zero_page_address);
+    //        ++zero_page_address;
+    //        // note that the address of the high byte may wrap around to the beginning of the zero page
+    //        std::uint8_t high_byte_of_address = read(zero_page_address);
+    //        std::uint16_t address_in_table = (high_byte_of_address << 8) + low_byte_of_address;
 
-            std::uint16_t address = calculate_address(program_counter_, i);
-            std::uint8_t data = read(address);
-            embellishment = fmt::format(" = {:04X} @ {:04X} = {:02X}", address_in_table, address, data);
-            break;
-          }
+    //        std::uint16_t address = calculate_address(program_counter_, i);
+    //        std::uint8_t data = read(address);
+    //        embellishment = fmt::format(" = {:04X} @ {:04X} = {:02X}", address_in_table, address, data);
+    //        break;
+    //      }
 
-          case zero_page_x_indexed:
-          case zero_page_y_indexed:
-          {
-            std::uint8_t address = calculate_address(program_counter_, i);
-            std::uint8_t data = read(address);
-            embellishment = fmt::format(" @ {:02X} = {:02X}", address, data);
-            break;
-          }
+    //      case zero_page_x_indexed:
+    //      case zero_page_y_indexed:
+    //      {
+    //        std::uint8_t address = calculate_address(program_counter_, i);
+    //        std::uint8_t data = read(address);
+    //        embellishment = fmt::format(" @ {:02X} = {:02X}", address, data);
+    //        break;
+    //      }
 
-          default:
-          {
-            if(info.op == JMP)
-            {
-              // JMP needs no embellishment in absolute address mode
-              break;
-            }
+    //      default:
+    //      {
+    //        if(info.op == JMP)
+    //        {
+    //          // JMP needs no embellishment in absolute address mode
+    //          break;
+    //        }
 
-            std::uint16_t address = calculate_address(program_counter_, i);
+    //        std::uint16_t address = calculate_address(program_counter_, i);
 
-            std::uint8_t data = read(address);
-            embellishment = fmt::format(" = {:02X}", data);
-            break;
-          }
-        }
+    //        std::uint8_t data = read(address);
+    //        embellishment = fmt::format(" = {:02X}", data);
+    //        break;
+    //      }
+    //    }
 
-        break;
-      }
+    //    break;
+    //  }
 
-      default:
-      {
-        break;
-      }
-    }
+    //  default:
+    //  {
+    //    break;
+    //  }
+    //}
 
-    arg += embellishment;
+    //arg += embellishment;
 
     std::string result;
     if(not arg.empty())
