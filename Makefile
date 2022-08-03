@@ -16,7 +16,7 @@ IMGUI_LIBS = `sdl2-config --libs` -lGL -ldl -lm
 %.o:%.cpp
 	clang -std=c++20 -Wall -Wextra -O3 -c -o $@ $<
 
-gui.o:gui.cpp gui.hpp
+gui.o:gui.cpp gui.hpp *.hpp
 	clang -std=c++20 -Wall -Wextra $(IMGUI_CFLAGS) -O3 -c -o $@ $<
 
 app:app.o gui.o $(IMGUI_OBJS)
