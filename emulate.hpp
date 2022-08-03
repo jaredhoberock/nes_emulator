@@ -16,7 +16,7 @@ inline void emulate(class system& sys, std::atomic<bool>& cancelled, std::atomic
   int cpu_cycle = sys.cpu().reset();
   for(int i = 0; i < 3 * cpu_cycle; ++i)
   {
-    sys.ppu().step_pixel();
+    sys.ppu().step_cycle();
     ++ppu_cycle;
   }
 
@@ -36,7 +36,7 @@ inline void emulate(class system& sys, std::atomic<bool>& cancelled, std::atomic
       // let the ppu catch up to the cpu
       for(int i = 0; i < 3 * num_cpu_cycles; ++i)
       {
-        sys.ppu().step_pixel();
+        sys.ppu().step_cycle();
         ++ppu_cycle;
 
         // detect the end of a frame

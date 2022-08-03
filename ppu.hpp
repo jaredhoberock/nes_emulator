@@ -151,8 +151,7 @@ class ppu
       return framebuffer_.data();
     }
 
-    // XXX this should be named step_cycle
-    inline void step_pixel()
+    inline void step_cycle()
     {
       framebuffer_[current_scanline_ * framebuffer_width + current_column_] = random_rgb();
 
