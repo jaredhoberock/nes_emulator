@@ -13,7 +13,7 @@ IMGUI_LIBS = `sdl2-config --libs` -lGL -ldl -lm
 %.o:$(IMGUI_DIR)/backends/%.cpp
 	clang -std=c++20 -Wall -Wextra $(IMGUI_CFLAGS) -c -o $@ $<
 
-%.o:%.cpp
+%.o:%.cpp *.hpp
 	clang -std=c++20 -Wall -Wextra -O3 -c -o $@ $<
 
 gui.o:gui.cpp gui.hpp *.hpp
