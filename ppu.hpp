@@ -1,5 +1,6 @@
 #pragma once
 
+#include "graphics_bus.hpp"
 #include <array>
 #include <cstdint>
 
@@ -14,8 +15,9 @@ class ppu
       std::uint8_t r,g,b;
     };
 
-    ppu()
-      : current_scanline_{0},
+    ppu(graphics_bus& gb)
+      : bus_{gb},
+        current_scanline_{0},
         current_column_{0},
         control_register_{},
         mask_register_{},
@@ -24,7 +26,7 @@ class ppu
         oam_memory_data_register_{},
         scroll_register_{},
         address_register_{},
-        data_register_buffer_{},
+        data_buffer_{},
         address_latch_{}
     {
       for(int row = 0; row < framebuffer_height; ++row)
@@ -38,31 +40,32 @@ class ppu
 
     inline std::uint8_t control_register() const
     {
-      return control_register_.reg;
+      return control_register_.as_byte;
     }
 
     inline void set_control_register(std::uint8_t value)
     {
-      control_register_.reg = value;
+      control_register_.as_byte = value;
     }
 
     inline std::uint8_t mask_register() const
     {
-      return mask_register_.reg;
+      return mask_register_.as_byte;
     }
 
     inline void set_mask_register(std::uint8_t value)
     {
-      mask_register_.reg = value;
+      mask_register_.as_byte = value;
     }
 
     inline std::uint8_t status_register()
     {
-      // XXX hack this in to see if nestest makes progress
+      // XXX hack this in to allow nestest to make progress
       status_register_.vertical_blank_started = true;
 
-      // the lower bytes of the status register often include bits from the last value of the data register
-      std::uint8_t result = (status_register_.reg & 0xE0) | (data_register_buffer_ & 0x1F);
+      // the lower bytes of the status register often include bits
+      // from the last value of the data register
+      std::uint8_t result = (status_register_.as_byte & 0xE0) | (data_buffer_ & 0x1F);
 
       // reading the status register clears the vertical blank bit
       status_register_.vertical_blank_started = false;
@@ -107,13 +110,13 @@ class ppu
     {
       if(address_latch_)
       {
-        // write to high byte
-        address_register_ = (value << 8) | (address_register_ & 0x00FF);
+        // write to low byte
+        address_register_ = (address_register_ & 0xFF00) | value;
       }
       else
       {
-        // write to low byte
-        address_register_ = (address_register_ & 0xFF00) | value;
+        // write to high byte
+        address_register_ = (value << 8) | (address_register_ & 0x00FF);
       }
 
       address_latch_ = !address_latch_;
@@ -123,31 +126,29 @@ class ppu
     {
       std::uint8_t result = read(address_register_);
 
-      // increment address register
-      address_register_ += control_register_.vram_address_increment_mode ? 32 : 1;
-
       // reads are delayed by one read in this range
       if(address_register_ < 0x3F00)
       {
-        std::swap(result, data_register_buffer_);
+        std::swap(result, data_buffer_);
       }
+
+      // increment address register
+      address_register_ += control_register_.vram_address_increment_mode ? 32 : 1;
 
       return result;
     }
 
     inline void set_data_register(std::uint8_t value)
     {
-      data_register_ = value;
+      write(address_register_, value);
+
+      // increment address register
+      address_register_ += control_register_.vram_address_increment_mode ? 32 : 1;
     }
 
     inline const rgb* framebuffer_data() const
     {
       return framebuffer_.data();
-    }
-
-    inline std::uint8_t read(std::uint16_t) const
-    {
-      return 0;
     }
 
     // XXX this should be named step_cycle
@@ -169,6 +170,18 @@ class ppu
     }
 
   private:
+    inline std::uint8_t read(std::uint16_t address) const
+    {
+      return bus_.read(address);
+    }
+
+    inline void write(std::uint16_t address, std::uint8_t value) const
+    {
+      bus_.write(address, value);
+    }
+
+    graphics_bus& bus_;
+    // XXX should the framebuffer should be on the graphics bus?
     std::array<rgb, framebuffer_width * framebuffer_height> framebuffer_;
     int current_scanline_;
     int current_column_;
@@ -183,11 +196,11 @@ class ppu
 
     union
     {
-      std::uint8_t reg;
+      std::uint8_t as_byte;
       struct
       {
         bool nametable_x : 1;
-        bool nametable_2 : 1;
+        bool nametable_y : 1;
         bool vram_address_increment_mode : 1;
         bool sprite_pattern_table_address : 1;
         bool background_pattern_table_address : 1;
@@ -199,7 +212,7 @@ class ppu
 
     union
     {
-      std::uint8_t reg;
+      std::uint8_t as_byte;
       struct
       {
         bool greyscale : 1;
@@ -215,7 +228,7 @@ class ppu
 
     union
     {
-      std::uint8_t reg;
+      std::uint8_t as_byte;
       struct
       {
         int  unused : 5;
@@ -230,9 +243,8 @@ class ppu
     std::uint8_t  oam_memory_data_register_;
     std::uint8_t  scroll_register_;
     std::uint16_t address_register_;
-    std::uint8_t  data_register_;
 
-    std::uint8_t data_register_buffer_;
+    std::uint8_t data_buffer_;
 
     // this indicates whether we're writing to the low or high byte of address_register_
     bool address_latch_;

@@ -11,7 +11,7 @@ class system
   public:
     system(const char* rom_filename)
       : cpu_{bus_},
-        ppu_{},
+        ppu_{graphics_bus_},
         cart_{rom_filename},
         bus_{cart_, ppu_},
         graphics_bus_{cart_}
@@ -37,7 +37,7 @@ class system
       return bus_;
     }
 
-    inline class graphics_bus& graphics_bus()
+    inline const class graphics_bus& graphics_bus() const
     {
       return graphics_bus_;
     }
