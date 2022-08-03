@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <fmt/format.h>
 #include <fstream>
 #include <stdexcept>
 #include <vector>
@@ -27,13 +28,13 @@ class nrom
 
         if(num_prg_banks_ == 1)
         {
-          // this mask does mirroring a single bank
+          // this mask does mirroring for a single bank
           result &= 0x3FFF;
         }
       }
       else
       {
-        throw std::runtime_error("nrom::map: Bad address");
+        throw std::runtime_error(fmt::format("nrom::map: Bad address: {}", address));
       }
 
       return result;
@@ -41,9 +42,9 @@ class nrom
 
     inline std::uint16_t map_graphics(std::uint16_t address) const
     {
-      if(address < 0x8000)
+      if(address >= 0x2000)
       {
-        throw std::runtime_error("nrom::map: Bad address");
+        throw std::runtime_error(fmt::format("nrom::map_graphics: Bad address: {}", address));
       }
 
       return address;
