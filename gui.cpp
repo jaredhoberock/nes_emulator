@@ -13,6 +13,7 @@
 #include <fmt/format.h>
 #include <future>
 #include <iostream>
+#include <optional>
 #include <stdio.h>
 #include <string>
 #include <tuple>
@@ -43,7 +44,140 @@ bool is_complete(std::future<void>& f)
 }
 
 
-class nes_framebuffer_window
+class palettes_window
+{
+  private:
+    // there are four colors in a palette
+    const int num_colors_ = 4;
+    const ImGuiWindowFlags window_flags_ = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_AlwaysAutoResize;
+    std::array<GLuint,8> textures_;
+
+  public:
+    palettes_window()
+    {
+      glGenTextures(textures_.size(), textures_.data());
+
+      for(auto t : textures_)
+      {
+        glBindTexture(GL_TEXTURE_2D, t);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, num_colors_, 1, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+        
+        if(glGetError())
+        {
+          throw std::runtime_error("palettes_window: GL error after glTexImage2D");
+        }
+      }
+    }
+
+    ~palettes_window()
+    {
+      glDeleteTextures(2, textures_.data());
+    }
+
+    std::optional<int> draw(const class system& sys) const
+    {
+      // copy the current state of the palettes into our textures
+      for(size_t i = 0; i < textures_.size(); ++i)
+      {
+        // get the current contents of the pattern table
+        std::array palette = sys.graphics_bus().palette_as_image(i);
+
+        glBindTexture(GL_TEXTURE_2D, textures_[i]);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, num_colors_, 1, GL_RGB, GL_UNSIGNED_BYTE, palette.data());
+        if(glGetError())
+        {
+          throw std::runtime_error(fmt::format("palettes_window: GL error after glCopyTexImage2D"));
+        }
+      }
+
+      // draw the palettes as buttons and allow selection
+      std::optional<int> result;
+      ImGui::Begin("Palettes" , nullptr, window_flags_);
+      for(size_t i = 0; i < textures_.size(); ++i)
+      {
+        if(ImGui::ImageButton(reinterpret_cast<void*>(textures_[i]), ImVec2(32, 8)))
+        {
+          result = i;
+        }
+        ImGui::SameLine();
+      }
+      ImGui::End();
+
+      return result;
+    }
+};
+
+
+
+class pattern_tables_window
+{
+  private:
+    const int width_  = graphics_bus::pattern_table_dim;
+    const int height_ = graphics_bus::pattern_table_dim;
+    const ImGuiWindowFlags window_flags_ = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_AlwaysAutoResize;
+    std::array<GLuint,2> textures_;
+
+  public:
+    pattern_tables_window()
+    {
+      glGenTextures(2, textures_.data());
+
+      for(auto t : textures_)
+      {
+        glBindTexture(GL_TEXTURE_2D, t);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width_, height_, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+        
+        if(glGetError())
+        {
+          throw std::runtime_error("pattern_tables_window: GL error after glTexImage2D");
+        }
+      }
+    }
+
+    ~pattern_tables_window()
+    {
+      glDeleteTextures(2, textures_.data());
+    }
+
+    void draw(const class system& sys, int selected_palette) const
+    {
+      // copy the current state of the framebuffer into our texture
+      for(int i = 0; i < 2; ++i)
+      {
+        // get the current contents of the pattern table
+        std::array pattern_table = sys.graphics_bus().pattern_table_as_image(i, selected_palette);
+
+        glBindTexture(GL_TEXTURE_2D, textures_[i]);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width_, height_, GL_RGB, GL_UNSIGNED_BYTE, pattern_table.data());
+        if(glGetError())
+        {
+          throw std::runtime_error(fmt::format("pattern_tables_window: GL error after glCopyTexImage2D"));
+        }
+      }
+
+      // draw a window displaying both pattern tables
+      ImGui::Begin("Pattern tables" , nullptr, window_flags_);
+      ImGui::Image(reinterpret_cast<void*>(textures_[0]), ImVec2(2*width_, 2*height_), ImVec2(0,0), ImVec2(1,1));
+      ImGui::SameLine();
+      ImGui::Image(reinterpret_cast<void*>(textures_[1]), ImVec2(2*width_, 2*height_), ImVec2(0,0), ImVec2(1,1));
+      ImGui::End();
+    }
+};
+
+
+class framebuffer_window
 {
   private:
     const int width_ = ppu::framebuffer_width;
@@ -52,7 +186,7 @@ class nes_framebuffer_window
     GLuint texture_;
 
   public:
-    nes_framebuffer_window()
+    framebuffer_window()
       : texture_{}
     {
       glGenTextures(1, &texture_);
@@ -67,11 +201,11 @@ class nes_framebuffer_window
       
       if(glGetError())
       {
-        throw std::runtime_error("nes_framebuffer_window: GL error after glTexImage2D");
+        throw std::runtime_error("framebuffer_window: GL error after glTexImage2D");
       }
     }
 
-    ~nes_framebuffer_window()
+    ~framebuffer_window()
     {
       glDeleteTextures(1, &texture_);
     }
@@ -83,7 +217,7 @@ class nes_framebuffer_window
       glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width_, height_, GL_RGB, GL_UNSIGNED_BYTE, sys.ppu().framebuffer_data());
       if(glGetError())
       {
-        throw std::runtime_error(fmt::format("nes_framebuffer_window: GL error after glCopyTexImage2D"));
+        throw std::runtime_error(fmt::format("framebuffer_window: GL error after glCopyTexImage2D"));
       }
 
       // draw a window
@@ -217,7 +351,10 @@ int gui(class system& sys)
   
   // Our state
   bool show_log_window = true;
-  nes_framebuffer_window framebuffer;
+  framebuffer_window framebuffer;
+  palettes_window palettes;
+  int selected_palette = 0;
+  pattern_tables_window pattern_tables;
   ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
   std::atomic<bool> emulation_cancelled = false;
@@ -263,7 +400,8 @@ int gui(class system& sys)
         emulation_cancelled = false;
         emulation = std::async([&]
         {
-          emulate(sys, emulation_cancelled, emulation_paused, null_stream, std::cerr);
+          //emulate(sys, emulation_cancelled, emulation_paused, null_stream, std::cerr);
+          emulate(sys, emulation_cancelled, emulation_paused, std::cout, std::cerr);
         });
       }
     }
@@ -286,6 +424,15 @@ int gui(class system& sys)
 
     // draw the current framebuffer
     framebuffer.draw(sys);
+
+    // draw the palettes
+    if(std::optional new_palette = palettes.draw(sys))
+    {
+      selected_palette = *new_palette;
+    }
+
+    // draw the pattern tables
+    pattern_tables.draw(sys, selected_palette);
     
     // Rendering
     ImGui::Render();
