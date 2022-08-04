@@ -54,17 +54,13 @@ class nrom
 
 class cartridge
 {
-  private:
-    // XXX these values are possibly only relevant to the mapper
-    int num_prg_banks_;
-    int num_chr_banks_;
-
-    std::vector<std::uint8_t> prg_memory_;
-    std::vector<std::uint8_t> chr_memory_;
-
-    nrom mapper_;
-
   public:
+    enum nametable_mirroring_kind
+    {
+      // XXX there are others
+      horizontal, vertical
+    };
+
     // see https://www.nesdev.org/wiki/INES#iNES_file_format
     struct ines_file_header
     {
@@ -92,14 +88,20 @@ class cartridge
       {
         return flags_6 & 0x04;
       }
+
+      inline nametable_mirroring_kind mirroring() const
+      {
+        return (flags_6 & 0x01) ? vertical : horizontal;
+      }
     };
 
     // XXX ideally, a cartridge is constructed from two arrays (prg & chr data) and a mapper
     //     so we should create a function whose job is to take a filename and return the tuple (mapper, prg_data, chr_data)
 
-    inline cartridge(int num_prg_banks, int num_chr_banks, bool trainer_present_in_stream, std::istream& is)
+    inline cartridge(int num_prg_banks, int num_chr_banks, nametable_mirroring_kind mirroring, bool trainer_present_in_stream, std::istream& is)
       : num_prg_banks_{num_prg_banks},
         num_chr_banks_{num_chr_banks},
+        nametable_mirroring_{mirroring},
         prg_memory_(num_prg_banks_ * 16384),
         chr_memory_(num_chr_banks_ * 8192),
         mapper_{num_prg_banks_}
@@ -118,7 +120,7 @@ class cartridge
     }
 
     inline cartridge(ines_file_header header, std::istream& is)
-      : cartridge{header.num_prg_rom_chunks, header.num_chr_rom_chunks, header.trainer_present(), is}
+      : cartridge{header.num_prg_rom_chunks, header.num_chr_rom_chunks, header.mirroring(), header.trainer_present(), is}
     {}
 
     inline cartridge(std::istream&& is)
@@ -128,6 +130,11 @@ class cartridge
     inline cartridge(const std::string& filename)
       : cartridge{std::ifstream{filename.c_str(), std::ios::binary}}
     {}
+
+    inline nametable_mirroring_kind nametable_mirroring() const
+    {
+      return nametable_mirroring_;
+    }
 
     inline std::uint8_t read(std::uint16_t address) const
     {
@@ -151,5 +158,17 @@ class cartridge
     {
       return chr_memory_[mapper_.map_graphics(address)];
     }
+
+  private:
+    // XXX these values are possibly only relevant to the mapper
+    int num_prg_banks_;
+    int num_chr_banks_;
+    nametable_mirroring_kind nametable_mirroring_;
+
+    std::vector<std::uint8_t> prg_memory_;
+    std::vector<std::uint8_t> chr_memory_;
+
+    nrom mapper_;
+
 };
 
