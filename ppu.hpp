@@ -60,15 +60,12 @@ class ppu
 
     inline std::uint8_t status_register()
     {
-      // XXX hack this in to allow nestest to make progress
-      status_register_.vertical_blank_started = true;
-
       // the lower bytes of the status register often include bits
       // from the last value of the data register
       std::uint8_t result = (status_register_.as_byte & 0xE0) | (data_buffer_ & 0x1F);
 
       // reading the status register clears the vertical blank bit
-      status_register_.vertical_blank_started = false;
+      status_register_.in_vertical_blank_period = false;
 
       // reading the status register also clears the address latch
       address_latch_ = false;
@@ -153,20 +150,40 @@ class ppu
 
     inline void step_cycle()
     {
-      framebuffer_[current_scanline_ * framebuffer_width + current_column_] = random_rgb();
+      if(current_scanline_ == 241 and current_column_ == 1)
+      {
+        status_register_.in_vertical_blank_period = true;
+        if(control_register_.generate_nmi)
+        {
+          nmi = true;
+        }
+      }
+
+      if(current_scanline_ == 261 and current_column_ == 1)
+      {
+        status_register_.in_vertical_blank_period = false;
+      }
+
+      if(0 <= current_scanline_ and current_scanline_ < framebuffer_height and
+         0 <= current_column_   and current_column_   < framebuffer_width)
+      {
+        framebuffer_[current_scanline_ * framebuffer_width + current_column_] = random_rgb();
+      }
 
       ++current_column_;
-      if(current_column_ == framebuffer_width)
+      if(current_column_ == 341)
       {
         current_column_ = 0;
         ++current_scanline_;
 
-        if(current_scanline_ == framebuffer_height)
+        if(current_scanline_ == 262)
         {
           current_scanline_ = 0;
         }
       }
     }
+
+    bool nmi;
 
   private:
     inline std::uint8_t read(std::uint16_t address) const
@@ -233,7 +250,7 @@ class ppu
         int  unused : 5;
         bool sprite_overflow : 1;
         bool sprite_0_hit : 1;
-        bool vertical_blank_started : 1;
+        bool in_vertical_blank_period : 1;
       };
     } status_register_;
 
