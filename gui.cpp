@@ -97,11 +97,13 @@ class palettes_window
       }
 
       // draw the palettes as buttons and allow selection
+      int frame_padding = 1;
       std::optional<int> result;
       ImGui::Begin("Palettes" , nullptr, window_flags_);
       for(size_t i = 0; i < textures_.size(); ++i)
       {
-        if(ImGui::ImageButton(reinterpret_cast<void*>(textures_[i]), ImVec2(32, 8)))
+        void* tex_id = reinterpret_cast<void*>(textures_[i]);
+        if(ImGui::ImageButton(tex_id, ImVec2(40, 10), ImVec2(0,0), ImVec2(1,1), frame_padding))
         {
           result = i;
         }
