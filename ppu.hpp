@@ -19,6 +19,7 @@ class ppu
 
     ppu(graphics_bus& gb)
       : bus_{gb},
+        palette_{},
         current_scanline_{0},
         current_column_{0},
         control_register_{},
@@ -150,6 +151,26 @@ class ppu
       return framebuffer_.data();
     }
 
+    inline std::uint8_t palette(std::uint8_t i) const
+    {
+      return palette_[i];
+    }
+
+    inline void set_palette(std::uint8_t i, std::uint8_t value)
+    {
+      palette_[i] = value;
+    }
+
+    inline std::array<rgb, 4> palette_as_image(int palette) const
+    {
+      return {as_rgb(palette,0), as_rgb(palette,1), as_rgb(palette,2), as_rgb(palette,3)};
+    }
+
+    inline rgb as_rgb(int palette, std::uint8_t pixel) const
+    {
+      return system_palette_[read(palette_base_address_ + 4 * palette + pixel)];
+    }
+
     inline void step_cycle()
     {
       if(current_scanline_ == 241 and current_column_ == 1)
@@ -188,11 +209,22 @@ class ppu
     bool nmi;
 
   private:
+    static constexpr std::uint16_t palette_base_address_ = 0x3F00;
+
+    // https://www.nesdev.org/wiki/PPU_palettes#2C02
+    static constexpr std::array<rgb,64> system_palette_ = {{
+      { 84, 84, 84}, {  0, 30,116}, {  8, 16,144}, { 48,  0,136}, { 68,  0,100}, { 92,  0, 48}, { 84,  4,  0}, { 60, 24,  0}, { 32, 42,  0}, {  8, 58,  0}, {  0, 64,  0}, {  0, 60,  0}, {  0, 50, 60}, {  0,  0,  0}, {0,0,0}, {0,0,0},
+      {152,150,152}, {  8, 76,196}, { 48, 50,236}, { 92, 30,228}, {136, 20,176}, {160, 20,100}, {152, 34, 32}, {120, 60,  0}, { 84, 90,  0}, { 40,114,  0}, {  8,124,  0}, {  0,118, 40}, {  0,102,120}, {  0,  0,  0}, {0,0,0}, {0,0,0},
+      {236,238,236}, { 76,154,236}, {120,124,236}, {176, 98,236}, {228, 84,236}, {236, 88,180}, {236,106,100}, {212,136, 32}, {160,170,  0}, {116,196,  0}, { 76,208, 32}, { 56,204,108}, { 56,180,204}, { 60, 60, 60}, {0,0,0}, {0,0,0},
+      {236,238,236}, {168,204,236}, {188,188,236}, {212,178,236}, {236,174,236}, {236,174,212}, {236,180,176}, {228,196,144}, {204,210,120}, {180,222,120}, {168,226,144}, {152,226,180}, {160,214,228}, {160,162,160}, {0,0,0}, {0,0,0}
+    }};
+
     std::uint8_t read(std::uint16_t address) const;
 
     void write(std::uint16_t address, std::uint8_t value) const;
 
     graphics_bus& bus_;
+    std::array<std::uint8_t, 32> palette_;
     // XXX should the framebuffer should be on the graphics bus?
     std::array<rgb, framebuffer_width * framebuffer_height> framebuffer_;
     int current_scanline_;

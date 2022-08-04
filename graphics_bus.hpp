@@ -12,8 +12,6 @@ class graphics_bus
   private:
     cartridge& cart_;
     ppu& ppu_;
-    // XXX the palette should maybe be moved to the ppu
-    std::array<std::uint8_t, 32> palette_;
     // XXX these should go into a single array called vram
     std::array<std::uint8_t, 1024> nametable_zero_;
     std::array<std::uint8_t, 1024> nametable_one_;
@@ -21,8 +19,7 @@ class graphics_bus
   public:
     graphics_bus(cartridge& cart, ppu& p)
       : cart_{cart},
-        ppu_{p},
-        palette_{}
+        ppu_{p}
     {}
 
     inline std::uint8_t read(std::uint16_t address) const
@@ -94,7 +91,7 @@ class graphics_bus
         if(address == 0x0018) address = 0x0008;
         if(address == 0x001C) address = 0x000C;
 
-        result = palette_[address];
+        result = ppu_.palette(address);
       }
       else
       {
@@ -187,7 +184,7 @@ class graphics_bus
         if(address == 0x0018) address = 0x0008;
         if(address == 0x001C) address = 0x000C;
 
-        palette_[address] = data;
+        ppu_.set_palette(address, data);
       }
       else
       {
@@ -195,31 +192,11 @@ class graphics_bus
       }
     }
 
-    struct rgb
-    {
-      std::uint8_t r, g, b;
-    };
-
-    static constexpr std::uint16_t palette_base_address = 0x3F00;
-
-    // https://www.nesdev.org/wiki/PPU_palettes#2C02
-    static constexpr std::array<rgb,64> system_palette = {{
-      { 84, 84, 84}, {  0, 30,116}, {  8, 16,144}, { 48,  0,136}, { 68,  0,100}, { 92,  0, 48}, { 84,  4,  0}, { 60, 24,  0}, { 32, 42,  0}, {  8, 58,  0}, {  0, 64,  0}, {  0, 60,  0}, {  0, 50, 60}, {  0,  0,  0}, {0,0,0}, {0,0,0},
-      {152,150,152}, {  8, 76,196}, { 48, 50,236}, { 92, 30,228}, {136, 20,176}, {160, 20,100}, {152, 34, 32}, {120, 60,  0}, { 84, 90,  0}, { 40,114,  0}, {  8,124,  0}, {  0,118, 40}, {  0,102,120}, {  0,  0,  0}, {0,0,0}, {0,0,0},
-      {236,238,236}, { 76,154,236}, {120,124,236}, {176, 98,236}, {228, 84,236}, {236, 88,180}, {236,106,100}, {212,136, 32}, {160,170,  0}, {116,196,  0}, { 76,208, 32}, { 56,204,108}, { 56,180,204}, { 60, 60, 60}, {0,0,0}, {0,0,0},
-      {236,238,236}, {168,204,236}, {188,188,236}, {212,178,236}, {236,174,236}, {236,174,212}, {236,180,176}, {228,196,144}, {204,210,120}, {180,222,120}, {168,226,144}, {152,226,180}, {160,214,228}, {160,162,160}, {0,0,0}, {0,0,0}
-    }};
-
-    inline rgb as_rgb(int palette, std::uint8_t pixel) const
-    {
-      return system_palette[read(palette_base_address + 4 * palette + pixel)];
-    }
-
     constexpr static int pattern_table_dim = 128;
 
     inline auto pattern_table_as_image(int i, int palette) const
     {
-      std::array<rgb, pattern_table_dim*pattern_table_dim> result;
+      std::array<ppu::rgb, pattern_table_dim*pattern_table_dim> result;
 
       // a pattern table is 16 * 16 tiles
       // each tile is 8 * 8 pixels
@@ -246,7 +223,7 @@ class graphics_bus
               int x = 8 * tile_x + (7 - col);
               int y = 8 * tile_y + row;
 
-              rgb color = as_rgb(palette, pixel);
+              ppu::rgb color = ppu_.as_rgb(palette, pixel);
 
               result[pattern_table_dim*y + x] = color;
             }
@@ -255,11 +232,6 @@ class graphics_bus
       }
 
       return result;
-    }
-
-    inline std::array<rgb, 4> palette_as_image(int palette) const
-    {
-      return {as_rgb(palette,0), as_rgb(palette,1), as_rgb(palette,2), as_rgb(palette,3)};
     }
 };
 
