@@ -1,6 +1,7 @@
 #pragma once
 
 #include "cartridge.hpp"
+#include "ppu.hpp"
 #include <cstdint>
 #include <fmt/format.h>
 #include <iostream>
@@ -10,6 +11,7 @@ class graphics_bus
 {
   private:
     cartridge& cart_;
+    ppu& ppu_;
     // XXX the palette should maybe be moved to the ppu
     std::array<std::uint8_t, 32> palette_;
     // XXX these should go into a single array called vram
@@ -17,8 +19,9 @@ class graphics_bus
     std::array<std::uint8_t, 1024> nametable_one_;
 
   public:
-    graphics_bus(cartridge& cart)
+    graphics_bus(cartridge& cart, ppu& p)
       : cart_{cart},
+        ppu_{p},
         palette_{}
     {}
 

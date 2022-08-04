@@ -14,7 +14,7 @@ class system
         ppu_{graphics_bus_},
         cart_{rom_filename},
         bus_{cart_, ppu_},
-        graphics_bus_{cart_}
+        graphics_bus_{cart_, ppu_}
     {}
 
     inline mos6502& cpu()
