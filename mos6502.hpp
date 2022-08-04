@@ -346,6 +346,7 @@ constexpr std::array<instruction_info,256> initialize_instruction_info_table()
 struct mos6502
 {
   static constexpr std::uint16_t interrupt_request_vector_location = 0xFFFE;
+  static constexpr std::uint16_t nonmaskable_interrupt_request_vector_location = 0xFFFA;
   static constexpr std::uint16_t reset_vector_location = 0xFFFC;
   static constexpr std::uint8_t  initial_stack_pointer_value = 0xFD;
   static constexpr std::uint8_t  initial_accumulator_value = 0x00;
@@ -1874,11 +1875,11 @@ struct mos6502
         break;
       }
 
-      //case BRK:
-      //{
-      //  execute_break();
-      //  break;
-      //}
+      case BRK:
+      {
+        execute_break();
+        break;
+      }
 
       case BVC:
       {
@@ -2253,6 +2254,35 @@ struct mos6502
 
     // execute instruction
     return execute(opcode);
+  }
+
+  // executes a nonmaskable interrupt
+  // returns the number of cycles consumed
+  int nonmaskable_interrupt()
+  {
+    // push the program counter to the stack
+    std::uint8_t low_pc_byte = static_cast<std::uint8_t>(program_counter_);
+    std::uint8_t high_pc_byte = program_counter_ >> 8;
+
+    push_stack(high_pc_byte);
+    push_stack(low_pc_byte);
+
+    std::uint8_t value = status_flags_as_byte();
+
+    // set bits 5, 4, and 2
+    value |= 0b00100000;
+    value |= 0b00010000;
+    value |= 0b00000100;
+
+    push_stack(value);
+
+    // read the new program counter from the nonmaskable_interrupt_request_vector_location
+    low_pc_byte = read(nonmaskable_interrupt_request_vector_location);
+    high_pc_byte = read(nonmaskable_interrupt_request_vector_location + 1);
+    program_counter_ = (high_pc_byte << 8) | low_pc_byte;
+
+    // this takes 8 cycles
+    return 8;
   }
 
   void log(std::ostream& os, int cpu_cycle, int ppu_cycle) const
