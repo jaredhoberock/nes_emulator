@@ -1,5 +1,5 @@
-nes: bus.hpp cartridge.hpp main.cpp mos6502.hpp system.hpp
-	clang -std=c++20 -Wall -Wextra main.cpp -lstdc++ -lfmt -o nes
+nes: bus.hpp cartridge.hpp main.cpp mos6502.hpp system.hpp ppu.hpp
+	clang -std=c++20 -Wall -Wextra main.cpp ppu.cpp -lstdc++ -lfmt -o nes
 
 IMGUI_DIR = ../imgui
 IMGUI_SOURCES = $(IMGUI_DIR)/imgui.cpp $(IMGUI_DIR)/imgui_draw.cpp $(IMGUI_DIR)/imgui_tables.cpp $(IMGUI_DIR)/imgui_widgets.cpp $(IMGUI_DIR)/backends/imgui_impl_sdl.cpp $(IMGUI_DIR)/backends/imgui_impl_opengl3.cpp
@@ -19,7 +19,7 @@ IMGUI_LIBS = `sdl2-config --libs` -lGL -ldl -lm
 gui.o:gui.cpp gui.hpp *.hpp
 	clang -std=c++20 -Wall -Wextra $(IMGUI_CFLAGS) -O3 -c -o $@ $<
 
-app:app.o gui.o $(IMGUI_OBJS)
+app:app.o gui.o ppu.o $(IMGUI_OBJS)
 	clang -o $@ $^ $(IMGUI_LIBS) -lstdc++ -lfmt -lpthread
 
 clean:
