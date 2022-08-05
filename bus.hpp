@@ -12,14 +12,21 @@ class bus
 {
   private:
     // XXX maybe all of these should be references
-    std::array<uint8_t, 0x800> internal_ram_;
+    std::array<uint8_t, 2048> internal_ram_;
     cartridge& cart_;
     ppu& ppu_;
 
   public:
     bus(cartridge& cart, ppu& p)
-      : cart_{cart}, ppu_{p}
+      : internal_ram_{{}}, cart_{cart}, ppu_{p}
     {}
+
+    inline std::array<std::uint8_t,256> zero_page() const
+    {
+      std::array<std::uint8_t,256> result;
+      std::copy_n(internal_ram_.begin(), result.size(), result.begin());
+      return result;
+    }
 
     std::uint8_t read(std::uint16_t address) const
     {
