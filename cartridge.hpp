@@ -34,7 +34,7 @@ class nrom
       }
       else
       {
-        throw std::runtime_error(fmt::format("nrom::map: Bad address: {}", address));
+        throw std::runtime_error(fmt::format("nrom::map: Bad address: {:04X}", address));
       }
 
       return result;
@@ -44,7 +44,7 @@ class nrom
     {
       if(address >= 0x2000)
       {
-        throw std::runtime_error(fmt::format("nrom::map_graphics: Bad address: {}", address));
+        throw std::runtime_error(fmt::format("nrom::map_graphics: Bad address: {:04X}", address));
       }
 
       return address;
@@ -121,7 +121,17 @@ class cartridge
 
     inline cartridge(ines_file_header header, std::istream& is)
       : cartridge{header.num_prg_rom_chunks, header.num_chr_rom_chunks, header.mirroring(), header.trainer_present(), is}
-    {}
+    {
+      if(header.mapper_id() != 0)
+      {
+        throw std::runtime_error(fmt::format("cartridge: ROM requires unsupported mapper {}", header.mapper_id()));
+      }
+
+      if(header.flags_6 & 0b00001000)
+      {
+        throw std::runtime_error("ROM requires four-screen VRAM");
+      }
+    }
 
     inline cartridge(std::istream&& is)
       : cartridge{ines_file_header{is}, is}
@@ -156,7 +166,8 @@ class cartridge
 
     inline std::uint8_t graphics_read(std::uint16_t address) const
     {
-      return chr_memory_[mapper_.map_graphics(address)];
+      std::uint16_t mapped_address = mapper_.map_graphics(address);
+      return chr_memory_[mapped_address];
     }
 
   private:
@@ -169,6 +180,5 @@ class cartridge
     std::vector<std::uint8_t> chr_memory_;
 
     nrom mapper_;
-
 };
 
