@@ -60,14 +60,10 @@ class bus
       else if(0x4000 <= address and address < 0x4018)
       {
         // apu and i/o
-        // XXX force this result to be 0xFF to match nestest while debugging
-        result = 0xFF;
       }
       else if(0x4018 <= address and address < 0x4020)
       {
         // apu and i/o functionality that is normally disabled
-        // XXX force this result to be 0xFF to match nestest while debugging
-        result = 0xFF;
       }
       else if(0x4020 <= address)
       {
