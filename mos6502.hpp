@@ -1018,6 +1018,9 @@ struct mos6502
     // push the processor status to the stack
     execute_push_processor_status();
 
+    // disable interrupts
+    interrupt_request_disable_flag_ = true;
+
     // set the program counter to the interrupt request vector
     program_counter_ = read(interrupt_request_vector_location) | (read(interrupt_request_vector_location + 1) << 8);
   }
