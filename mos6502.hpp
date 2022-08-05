@@ -7,6 +7,7 @@
 #include <fmt/ostream.h>
 #include <functional>
 #include <iostream>
+#include <map>
 #include <stdexcept>
 #include <string>
 
@@ -443,23 +444,28 @@ struct mos6502
     bus_.write(address, value);
   }
 
-  instruction read_current_instruction() const
+  instruction read_instruction(std::uint16_t address) const
   {
     instruction result{};
 
-    result.opcode = read(program_counter_);
+    result.opcode = read(address);
 
     if(result.num_bytes() > 1)
     {
-      result.byte1 = read(program_counter_ + 1);
+      result.byte1 = read(address + 1);
     }
 
     if(result.num_bytes() > 2)
     {
-      result.byte2 = read(program_counter_ + 2);
+      result.byte2 = read(address + 2);
     }
 
     return result;
+  }
+
+  instruction read_current_instruction() const
+  {
+    return read_instruction(program_counter_);
   }
 
   // program_counter is the pc of instruction i
@@ -999,7 +1005,8 @@ struct mos6502
 
   void execute_break()
   {
-    --program_counter_;
+    // XXX check the implementation of this function
+    program_counter_++;
 
     // push the program counter to the stack
     std::uint8_t low_pc_byte = static_cast<std::uint8_t>(program_counter_);
@@ -1323,31 +1330,25 @@ struct mos6502
 
   void execute_rotate_left(std::uint16_t address)
   {  
-    std::uint8_t m = read(address);
-
-    // remember the old carry flag
-    bool old_carry_flag = carry_flag_;
-
-    // set the carry flag
-    carry_flag_ = 0b10000000 & m;
+    // note we read an 8b value and store it in a 16b variable
+    std::uint16_t m = read(address);
 
     // shift
     m <<= 1;
 
-    // set bit 0 to the old carry flag
-    if(old_carry_flag)
+    // if the carry is set, set bit 0 of m to 1
+    if(carry_flag_)
     {
       m |= 0b00000001;
     }
-    else
-    {
-      m &= 0b11111110;
-    }
+
+    // set the carry bit to bit 8 of m
+    carry_flag_ = m > 0xFF;
 
     // set the zero flag
     zero_flag_ = (m == 0);
 
-    // set the negative flag
+    // set the negative flag to bit 7 of m
     negative_flag_ = 0b10000000 & m;
 
     // store
@@ -1356,30 +1357,29 @@ struct mos6502
 
   void execute_rotate_left_accumulator()
   {  
-    // remember the old carry flag
-    bool old_carry_flag = carry_flag_;
-
-    // set the carry flag
-    carry_flag_ = 0b10000000 & accumulator_;
+    // note we read an 8b value and store it in a 16b variable
+    std::uint16_t m = accumulator_;
 
     // shift
-    accumulator_ <<= 1;
+    m <<= 1;
 
-    // set bit 0 to the old carry flag
-    if(old_carry_flag)
+    // if the carry is set, set bit 0 of m to 1
+    if(carry_flag_)
     {
-      accumulator_ |= 0b00000001;
+      m |= 0b00000001;
     }
-    else
-    {
-      accumulator_ &= 0b11111110;
-    }
+
+    // set the carry bit to bit 8 of m
+    carry_flag_ = m > 0xFF;
 
     // set the zero flag
-    zero_flag_ = (accumulator_ == 0);
+    zero_flag_ = (m == 0);
 
-    // set the negative flag
-    negative_flag_ = 0b10000000 & accumulator_;
+    // set the negative flag to bit 7 of m
+    negative_flag_ = 0b10000000 & m;
+
+    // store
+    accumulator_ = m;
   }
 
   void execute_rotate_right(std::uint16_t address)
@@ -1905,6 +1905,12 @@ struct mos6502
         break;
       }
 
+      case CLI:
+      {
+        throw std::runtime_error("mos6502::execute: CLI unimplemented");
+        break;
+      }
+
       case CLV:
       {
         execute_clear_overflow_flag();
@@ -2269,12 +2275,14 @@ struct mos6502
 
     std::uint8_t value = status_flags_as_byte();
 
-    // set bits 5, 4, and 2
-    value |= 0b00100000;
-    value |= 0b00010000;
-    value |= 0b00000100;
+    // see https://www.nesdev.org/wiki/Status_flags#The_B_flag
+    value |= 0b00100000; // set bit 5
+    value &= 0b11101111; // clear bit 4
 
     push_stack(value);
+
+    // disable interrupts
+    interrupt_request_disable_flag_ = true;
 
     // read the new program counter from the nonmaskable_interrupt_request_vector_location
     low_pc_byte = read(nonmaskable_interrupt_request_vector_location);
@@ -2329,6 +2337,37 @@ struct mos6502
       // denote illegal operations with a *
       fmt::print(os, "{:04X}  {:<8} *{:<31} {} {} CYC:{}\n", program_counter_, instruction_words, instruction_log, registers, ppu, cpu_cycle);
     }
+  }
+
+  inline std::uint16_t program_counter() const
+  {
+    return program_counter_;
+  }
+
+  inline std::map<std::uint16_t, std::string> disassemble_program() const
+  {
+    std::map<std::uint16_t, std::string> result;
+
+    std::uint32_t address = 0x00000000;
+    std::uint32_t end     = 0x00010000;
+
+    while(address < end)
+    {
+      try
+      {
+        instruction i = read_instruction(address);
+        result[address] = nestest_instruction_log(i);
+        address += i.num_bytes();
+      }
+      catch(std::runtime_error)
+      {
+        // illegal instruction
+        result[address] = fmt::format("???", address);
+        address += 1;
+      }
+    }
+
+    return result;
   }
 };
 
