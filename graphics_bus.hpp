@@ -19,8 +19,11 @@ class graphics_bus
   public:
     graphics_bus(cartridge& cart, ppu& p)
       : cart_{cart},
-        ppu_{p}
-    {}
+        ppu_{p},
+        nametable_zero_{{}},
+        nametable_one_{{}}
+    {
+    }
 
     inline std::uint8_t read(std::uint16_t address) const
     {
@@ -95,7 +98,7 @@ class graphics_bus
       }
       else
       {
-        throw std::runtime_error(fmt::format("graphics_bus::read: Bad adddress: {:04X}", address));
+        throw std::runtime_error(fmt::format("graphics_bus::read: Bad address: {:04X}", address));
       }
 
       return result;
@@ -232,6 +235,11 @@ class graphics_bus
       }
 
       return result;
+    }
+
+    inline const std::array<std::uint8_t,1024>& nametable(int i) const
+    {
+      return (i == 0) ? nametable_zero_ : nametable_one_;
     }
 };
 
