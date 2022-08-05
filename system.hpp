@@ -22,6 +22,11 @@ class system
       return cpu_;
     }
 
+    inline const mos6502& cpu() const
+    {
+      return cpu_;
+    }
+
     inline const ppu& ppu() const
     {
       return ppu_;
@@ -33,6 +38,11 @@ class system
     }
 
     inline class bus& bus()
+    {
+      return bus_;
+    }
+
+    inline const class bus& bus() const
     {
       return bus_;
     }
