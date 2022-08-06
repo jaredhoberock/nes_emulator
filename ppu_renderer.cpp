@@ -1,12 +1,6 @@
 #include "ppu_renderer.hpp"
 
 
-std::uint8_t ppu_renderer::read(std::uint16_t address) const
-{
-  return bus_.read(address);
-}
-
-
 // see https://www.nesdev.org/wiki/PPU_rendering
 // and https://www.nesdev.org/wiki/File:Ntsc_timing.png
 std::optional<bool> ppu_renderer::step_cycle(bool show_background, bool show_sprites,

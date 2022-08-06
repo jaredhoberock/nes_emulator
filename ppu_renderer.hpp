@@ -42,9 +42,9 @@ class ppu_renderer
       palette_[i] = value;
     }
 
-    inline rgb as_rgb(int palette_idx, std::uint8_t pixel) const
+    inline rgb as_rgb(int palette_idx, std::uint8_t color_idx) const
     {
-      return system_palette_[palette_[4*palette_idx + pixel]];
+      return system_palette_[palette_[4*palette_idx + color_idx]];
     }
 
     inline std::array<rgb,4> palette_as_image(int palette_idx) const
@@ -77,7 +77,10 @@ class ppu_renderer
 
   private:
     // read is called by step_cycle's helper functions
-    std::uint8_t read(std::uint16_t address) const;
+    inline std::uint8_t read(std::uint16_t address) const
+    {
+      return bus_.read(address);
+    }
 
     // https://www.nesdev.org/wiki/PPU_palettes#2C02
     static constexpr std::array<rgb,64> system_palette_ = {{
