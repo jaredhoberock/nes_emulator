@@ -162,18 +162,6 @@ class ppu
     }
 
     // XXX eliminate this function
-    inline std::uint8_t palette(std::uint8_t i) const
-    {
-      return renderer_.palette(i);
-    }
-
-    // XXX eliminate this function
-    inline void set_palette(std::uint8_t i, std::uint8_t value)
-    {
-      renderer_.set_palette(i, value);
-    }
-
-    // XXX eliminate this function
     inline std::array<rgb, 4> palette_as_image(int palette) const
     {
       return renderer_.palette_as_image(palette);
