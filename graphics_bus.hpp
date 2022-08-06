@@ -27,7 +27,7 @@ class graphics_bus
 
       if(cart_.nametable_mirroring() != cartridge::horizontal and cart_.nametable_mirroring() != cartridge::vertical)
       {
-        throw std::runtime_error("graphics_bus::read: Unimplemented nametable mirroring kind");
+        throw std::runtime_error("graphics_bus::map_nametable_address: Unimplemented nametable mirroring kind");
       }
 
       // to find the index of the logical nametable, just divide the address by the nametable size
