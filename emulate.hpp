@@ -13,7 +13,7 @@ inline void emulate(class system& sys)
   int cpu_cycle = sys.cpu().reset();
   for(int i = 0; i < 3 * cpu_cycle; ++i)
   {
-    sys.ppu().new_step_cycle();
+    sys.ppu().step_cycle();
     ++ppu_cycle;
   }
 
@@ -35,7 +35,7 @@ inline void emulate(class system& sys)
     // let the ppu catch up to the cpu
     for(int i = 0; i < 3 * num_cpu_cycles; ++i)
     {
-      sys.ppu().new_step_cycle();
+      sys.ppu().step_cycle();
       ++ppu_cycle;
     }
 
@@ -53,7 +53,7 @@ inline void emulate(class system& sys, std::atomic<bool>& cancelled, std::atomic
   int cpu_cycle = sys.cpu().reset();
   for(int i = 0; i < 3 * cpu_cycle; ++i)
   {
-    sys.ppu().new_step_cycle();
+    sys.ppu().step_cycle();
     ++ppu_cycle;
   }
 
@@ -65,7 +65,7 @@ inline void emulate(class system& sys, std::atomic<bool>& cancelled, std::atomic
       paused.wait(true);
 
       // log current cpu state
-      //sys.cpu().log(cpu_log, cpu_cycle, ppu_cycle);
+      sys.cpu().log(cpu_log, cpu_cycle, ppu_cycle);
 
       // execute the next instruction
       int num_cpu_cycles = sys.cpu().step_instruction();
@@ -76,13 +76,13 @@ inline void emulate(class system& sys, std::atomic<bool>& cancelled, std::atomic
         num_cpu_cycles += sys.cpu().nonmaskable_interrupt();
         sys.ppu().nmi = false;
 
-//        std::this_thread::sleep_for(std::chrono::microseconds(16667));
+        std::this_thread::sleep_for(std::chrono::microseconds(16667));
       }
 
       // let the ppu catch up to the cpu
       for(int i = 0; i < 3 * num_cpu_cycles; ++i)
       {
-        sys.ppu().new_step_cycle();
+        sys.ppu().step_cycle();
         ++ppu_cycle;
       }
 

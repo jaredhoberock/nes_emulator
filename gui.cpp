@@ -44,6 +44,126 @@ bool is_complete(std::future<void>& f)
 }
 
 
+class disassembly_window
+{
+  private:
+    std::map<std::uint16_t, std::string> disassembly_;
+
+  public:
+    disassembly_window(const class system& sys)
+      : disassembly_(sys.cpu().disassemble_program())
+    {}
+
+    void draw(const class system& sys)
+    {
+      ImGui::Begin("Disassembly");
+      std::uint16_t focal_address = sys.cpu().program_counter();
+      auto focal_instruction = disassembly_.find(focal_address);
+      if(focal_instruction == disassembly_.end())
+      {
+        ImGui::Text("Couldn't find instruction");
+      }
+      else
+      {
+        // rewind to the instructions before the focal instruction
+        std::uint16_t num_instructions = 100;
+        std::uint16_t counter = num_instructions / 2;
+        auto instruction = focal_instruction;
+        while(instruction != disassembly_.begin() and counter > 0)
+        {
+          --instruction;
+          --counter;
+        }
+
+        // draw the instructions before the focal address
+        for(; instruction != focal_instruction; ++instruction)
+        {
+          ImGui::Text("$%04X: %s", instruction->first, instruction->second.c_str());
+        }
+
+        // draw the focal instruction
+        ImGui::TextColored(ImVec4(0,1,0,1), "$%04X: %s", focal_instruction->first, focal_instruction->second.c_str());
+
+        // draw the instructions after the focal instruction
+        counter = num_instructions / 2;
+        for(auto instruction = std::next(focal_instruction); instruction != disassembly_.end() and counter > 0; ++instruction)
+        {
+          ImGui::Text("$%04X: %s", instruction->first, instruction->second.c_str());
+          --counter;
+        }
+      }
+
+      ImGui::End();
+    }
+};
+
+
+void draw_zero_page(const class system& sys)
+{
+  std::array<std::uint8_t,256> zp = sys.bus().zero_page();
+
+  ImGui::Begin("Zero page");
+  for(std::uint8_t row = 0; row < 16; ++row)
+  {
+    const std::uint8_t* d = zp.data() + 16 * row;
+    ImGui::Text("$%X0: %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X", 
+                  row, d[0],d[1],d[2],d[3],d[4],d[5],d[6],d[7],d[8],d[9],d[10],d[11],d[12],d[13],d[14],d[15]);
+  }
+  ImGui::End();
+}
+
+void draw_nametable(const class system& sys, int which)
+{
+  std::span nt = sys.graphics_bus().nametable(which);
+
+  const char* title = which == 0 ? "Nametable 0" : "Nametable 1";
+  ImGui::Begin(title);
+  for(int row = 0; row < 30; ++row)
+  {
+    for(int tile = 0; tile < 32; ++tile)
+    {
+      ImGui::Text("%02X", nt[row * 32 + tile]);
+      if(tile != 31)
+      {
+        ImGui::SameLine();
+      }
+    }
+  }
+  ImGui::End();
+}
+
+
+void maybe_print_nametable(const class system& sys)
+{
+  ImGui::Begin("Print Nametable");
+  if(ImGui::Button("Print Nametable 0"))
+  {
+    fmt::print("nametable 0:\n");
+    for(int row = 0; row < 30; ++row)
+    {
+      for(int tile = 0; tile < 32; ++tile)
+      {
+        fmt::print("{:02X} ", sys.graphics_bus().nametable(0)[row * 32 + tile]);
+      }
+      fmt::print("\n");
+    }
+  }
+  if(ImGui::Button("Print Nametable 1"))
+  {
+    fmt::print("nametable 1:\n");
+    for(int row = 0; row < 30; ++row)
+    {
+      for(int tile = 0; tile < 32; ++tile)
+      {
+        fmt::print("{:02X} ", sys.graphics_bus().nametable(1)[row * 32 + tile]);
+      }
+      fmt::print("\n");
+    }
+  }
+  ImGui::End();
+}
+
+
 class palettes_window
 {
   private:
@@ -342,7 +462,8 @@ int gui(class system& sys)
   // Setup Dear ImGui context
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
-  ImGuiIO& io = ImGui::GetIO(); (void)io;
+  ImGuiIO& io = ImGui::GetIO();
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
   
   // Setup Dear ImGui style
   ImGui::StyleColorsDark();
@@ -357,6 +478,7 @@ int gui(class system& sys)
   palettes_window palettes;
   int selected_palette = 0;
   pattern_tables_window pattern_tables;
+  disassembly_window disassembly{sys};
   ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
   std::atomic<bool> emulation_cancelled = false;
@@ -435,6 +557,12 @@ int gui(class system& sys)
 
     // draw the pattern tables
     pattern_tables.draw(sys, selected_palette);
+
+    //maybe_print_nametable(sys);
+    draw_nametable(sys, 0);
+    draw_nametable(sys, 1);
+    draw_zero_page(sys);
+    disassembly.draw(sys);
     
     // Rendering
     ImGui::Render();

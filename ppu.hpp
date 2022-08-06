@@ -1,6 +1,8 @@
 #pragma once
 
+#include "ppu_renderer.hpp"
 #include <array>
+#include <cassert>
 #include <cstdint>
 
 // use a forward declaration of graphics_bus here because graphics_bus.hpp #includes this file
@@ -12,25 +14,23 @@ class ppu
     constexpr static int framebuffer_width = 256;
     constexpr static int framebuffer_height = 240;
 
-    struct rgb
-    {
-      std::uint8_t r,g,b;
-    };
+    using rgb = ppu_renderer::rgb;
 
     ppu(graphics_bus& gb)
-      : bus_{gb},
-        palette_{},
-        current_scanline_{0},
-        current_column_{0},
+      : nmi{},
+        bus_{gb},
+        framebuffer_{},
+        renderer_{bus_,framebuffer_},
         control_register_{},
         mask_register_{},
         status_register_{},
         oam_memory_address_register_{},
         oam_memory_data_register_{},
-        scroll_register_{},
-        address_register_{},
         data_buffer_{},
-        address_latch_{}
+        address_latch_{},
+        vram_address_{},
+        tram_address_{},
+        fine_x_{}
     {
       for(int row = 0; row < framebuffer_height; ++row)
       {
@@ -98,12 +98,23 @@ class ppu
 
     inline std::uint8_t scroll_register() const
     {
-      return scroll_register_;
+      return 0;
     }
 
     inline void set_scroll_register(std::uint8_t value)
     {
-      scroll_register_ = value;
+      if(address_latch_)
+      {
+        tram_address_.fine_y = value & 0x07;
+        tram_address_.coarse_y = value >> 3;
+      }
+      else
+      {
+        fine_x_ = value & 0x07;
+        tram_address_.coarse_x = value >> 3;
+      }
+
+      address_latch_ = !address_latch_;
     }
 
     inline void set_address_register(std::uint8_t value)
@@ -111,12 +122,13 @@ class ppu
       if(address_latch_)
       {
         // write to low byte
-        address_register_ = (address_register_ & 0xFF00) | value;
+        tram_address_.as_uint16 = (tram_address_.as_uint16 & 0xFF00) | value;
+        vram_address_ = tram_address_;
       }
       else
       {
         // write to high byte
-        address_register_ = (value << 8) | (address_register_ & 0x00FF);
+        tram_address_.as_uint16 = (value << 8) | (tram_address_.as_uint16 & 0x00FF);
       }
 
       address_latch_ = !address_latch_;
@@ -124,26 +136,26 @@ class ppu
 
     inline std::uint8_t data_register()
     {
-      std::uint8_t result = read(address_register_);
+      std::uint8_t result = read(vram_address_.as_uint16);
 
       // reads are delayed by one read in this range
-      if(address_register_ < 0x3F00)
+      if(vram_address_.as_uint16 < 0x3F00)
       {
         std::swap(result, data_buffer_);
       }
 
       // increment address register
-      address_register_ += control_register_.vram_address_increment_mode ? 32 : 1;
+      vram_address_.as_uint16 += control_register_.vram_address_increment_mode ? 32 : 1;
 
       return result;
     }
 
     inline void set_data_register(std::uint8_t value)
     {
-      write(address_register_, value);
+      write(vram_address_.as_uint16, value);
 
       // increment address register
-      address_register_ += control_register_.vram_address_increment_mode ? 32 : 1;
+      vram_address_.as_uint16 += control_register_.vram_address_increment_mode ? 32 : 1;
     }
 
     inline const rgb* framebuffer_data() const
@@ -151,94 +163,45 @@ class ppu
       return framebuffer_.data();
     }
 
+    // XXX eliminate this function
     inline std::uint8_t palette(std::uint8_t i) const
     {
-      return palette_[i];
+      return renderer_.palette(i);
     }
 
+    // XXX eliminate this function
     inline void set_palette(std::uint8_t i, std::uint8_t value)
     {
-      palette_[i] = value;
+      renderer_.set_palette(i, value);
     }
 
+    // XXX eliminate this function
     inline std::array<rgb, 4> palette_as_image(int palette) const
     {
-      return {as_rgb(palette,0), as_rgb(palette,1), as_rgb(palette,2), as_rgb(palette,3)};
+      return renderer_.palette_as_image(palette);
     }
 
+    // XXX eliminate this function
     inline rgb as_rgb(int palette, std::uint8_t pixel) const
     {
-      return system_palette_[read(palette_base_address_ + 4 * palette + pixel)];
+      return renderer_.as_rgb(palette, pixel);
     }
 
-    inline void step_cycle()
-    {
-      if(current_scanline_ == 241 and current_column_ == 1)
-      {
-        status_register_.in_vertical_blank_period = true;
-        if(control_register_.generate_nmi)
-        {
-          nmi = true;
-        }
-      }
-
-      if(current_scanline_ == 261 and current_column_ == 1)
-      {
-        status_register_.in_vertical_blank_period = false;
-      }
-
-      if(0 <= current_scanline_ and current_scanline_ < framebuffer_height and
-         0 <= current_column_   and current_column_   < framebuffer_width)
-      {
-        framebuffer_[current_scanline_ * framebuffer_width + current_column_] = random_rgb();
-      }
-
-      ++current_column_;
-      if(current_column_ == 341)
-      {
-        current_column_ = 0;
-        ++current_scanline_;
-
-        if(current_scanline_ == 262)
-        {
-          current_scanline_ = 0;
-        }
-      }
-    }
+    void step_cycle();
 
     bool nmi;
 
   private:
-    static constexpr std::uint16_t palette_base_address_ = 0x3F00;
-
-    // https://www.nesdev.org/wiki/PPU_palettes#2C02
-    static constexpr std::array<rgb,64> system_palette_ = {{
-      { 84, 84, 84}, {  0, 30,116}, {  8, 16,144}, { 48,  0,136}, { 68,  0,100}, { 92,  0, 48}, { 84,  4,  0}, { 60, 24,  0}, { 32, 42,  0}, {  8, 58,  0}, {  0, 64,  0}, {  0, 60,  0}, {  0, 50, 60}, {  0,  0,  0}, {0,0,0}, {0,0,0},
-      {152,150,152}, {  8, 76,196}, { 48, 50,236}, { 92, 30,228}, {136, 20,176}, {160, 20,100}, {152, 34, 32}, {120, 60,  0}, { 84, 90,  0}, { 40,114,  0}, {  8,124,  0}, {  0,118, 40}, {  0,102,120}, {  0,  0,  0}, {0,0,0}, {0,0,0},
-      {236,238,236}, { 76,154,236}, {120,124,236}, {176, 98,236}, {228, 84,236}, {236, 88,180}, {236,106,100}, {212,136, 32}, {160,170,  0}, {116,196,  0}, { 76,208, 32}, { 56,204,108}, { 56,180,204}, { 60, 60, 60}, {0,0,0}, {0,0,0},
-      {236,238,236}, {168,204,236}, {188,188,236}, {212,178,236}, {236,174,236}, {236,174,212}, {236,180,176}, {228,196,144}, {204,210,120}, {180,222,120}, {168,226,144}, {152,226,180}, {160,214,228}, {160,162,160}, {0,0,0}, {0,0,0}
-    }};
-
     std::uint8_t read(std::uint16_t address) const;
 
     void write(std::uint16_t address, std::uint8_t value) const;
 
     graphics_bus& bus_;
-    std::array<std::uint8_t, 32> palette_;
     // XXX should the framebuffer should be on the graphics bus?
     std::array<rgb, framebuffer_width * framebuffer_height> framebuffer_;
-    int current_scanline_;
-    int current_column_;
+    ppu_renderer renderer_;
 
-    rgb random_rgb() const
-    {
-      std::uint8_t r = (char)rand();
-      std::uint8_t g = (char)rand();
-      std::uint8_t b = (char)rand();
-      return {r,g,b};
-    }
-
-    union
+    union control_register_t
     {
       std::uint8_t as_byte;
       struct
@@ -252,9 +215,13 @@ class ppu
         bool ppu_master_slave_select : 1;
         bool generate_nmi : 1;
       };
-    } control_register_;
 
-    union
+      control_register_t() : as_byte{} {}
+    };
+
+    static_assert(sizeof(control_register_t) == sizeof(std::uint8_t));
+
+    union mask_register_t
     {
       std::uint8_t as_byte;
       struct
@@ -268,29 +235,38 @@ class ppu
         bool emphasize_green : 1;
         bool emphasize_blue : 1;
       };
-    } mask_register_;
 
-    union
+      mask_register_t() : as_byte{} {}
+    };
+
+    static_assert(sizeof(mask_register_t) == sizeof(std::uint8_t));
+
+    union status_register_t
     {
       std::uint8_t as_byte;
       struct
       {
-        int  unused : 5;
+        std::uint8_t unused : 5;
         bool sprite_overflow : 1;
         bool sprite_0_hit : 1;
         bool in_vertical_blank_period : 1;
       };
-    } status_register_;
+
+      status_register_t() : as_byte{} {}
+    };
+
+    static_assert(sizeof(status_register_t) == sizeof(std::uint8_t));
 
     // register state
-    std::uint8_t  oam_memory_address_register_;
-    std::uint8_t  oam_memory_data_register_;
-    std::uint8_t  scroll_register_;
-    std::uint16_t address_register_;
-
+    control_register_t control_register_;
+    mask_register_t mask_register_;
+    status_register_t status_register_;
+    std::uint8_t oam_memory_address_register_;
+    std::uint8_t oam_memory_data_register_;
     std::uint8_t data_buffer_;
-
-    // this indicates whether we're writing to the low or high byte of address_register_
     bool address_latch_;
+    ppu_renderer::loopy_register vram_address_;
+    ppu_renderer::loopy_register tram_address_;
+    std::uint8_t fine_x_;
 };
 

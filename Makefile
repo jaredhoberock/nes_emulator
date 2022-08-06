@@ -1,5 +1,5 @@
-nes: bus.hpp cartridge.hpp main.cpp mos6502.hpp ppu.hpp ppu.cpp system.hpp
-	clang -std=c++20 -Wall -Wextra main.cpp ppu.cpp -lstdc++ -lfmt -o $@
+nes: bus.hpp cartridge.hpp main.cpp mos6502.hpp ppu.hpp ppu.cpp ppu_renderer.hpp ppu_renderer.cpp system.hpp
+	clang -std=c++20 -Wall -Wextra main.cpp ppu.cpp ppu_renderer.cpp -lstdc++ -lfmt -o $@
 
 headless: *.hpp *.cpp Makefile
 #	clang -std=c++20 -Wall -Wextra -g headless.cpp ppu.cpp -lstdc++ -lfmt -o $@
@@ -26,7 +26,7 @@ IMGUI_LIBS = `sdl2-config --libs` -lGL -ldl -lm
 gui.o:gui.cpp gui.hpp *.hpp
 	clang -std=c++20 -Wall -Wextra $(IMGUI_CFLAGS) -O3 -c -o $@ $<
 
-app:app.o gui.o ppu.o $(IMGUI_OBJS)
+app:app.o gui.o ppu.o ppu_renderer.o $(IMGUI_OBJS)
 	clang -o $@ $^ $(IMGUI_LIBS) -lstdc++ -lfmt -lpthread
 
 clean:
