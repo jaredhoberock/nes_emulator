@@ -1,12 +1,10 @@
 #pragma once
 
+#include "graphics_bus.hpp"
 #include "ppu_renderer.hpp"
 #include <array>
 #include <cassert>
 #include <cstdint>
-
-// use a forward declaration of graphics_bus here because graphics_bus.hpp #includes this file
-class graphics_bus;
 
 class ppu
 {
@@ -194,7 +192,7 @@ class ppu
   private:
     std::uint8_t read(std::uint16_t address) const;
 
-    void write(std::uint16_t address, std::uint8_t value) const;
+    void write(std::uint16_t address, std::uint8_t value);
 
     graphics_bus& bus_;
     // XXX should the framebuffer should be on the graphics bus?

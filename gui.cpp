@@ -114,7 +114,7 @@ void draw_zero_page(const class system& sys)
 
 void draw_nametable(const class system& sys, int which)
 {
-  std::span nt = sys.graphics_bus().nametable(which);
+  std::span nt = sys.nametable(which);
 
   const char* title = which == 0 ? "Nametable 0" : "Nametable 1";
   ImGui::Begin(title);
@@ -143,7 +143,7 @@ void maybe_print_nametable(const class system& sys)
     {
       for(int tile = 0; tile < 32; ++tile)
       {
-        fmt::print("{:02X} ", sys.graphics_bus().nametable(0)[row * 32 + tile]);
+        fmt::print("{:02X} ", sys.nametable(0)[row * 32 + tile]);
       }
       fmt::print("\n");
     }
@@ -155,7 +155,7 @@ void maybe_print_nametable(const class system& sys)
     {
       for(int tile = 0; tile < 32; ++tile)
       {
-        fmt::print("{:02X} ", sys.graphics_bus().nametable(1)[row * 32 + tile]);
+        fmt::print("{:02X} ", sys.nametable(1)[row * 32 + tile]);
       }
       fmt::print("\n");
     }
@@ -240,8 +240,8 @@ class palettes_window
 class pattern_tables_window
 {
   private:
-    const int width_  = graphics_bus::pattern_table_dim;
-    const int height_ = graphics_bus::pattern_table_dim;
+    const int width_  = system::pattern_table_dim;
+    const int height_ = system::pattern_table_dim;
     const ImGuiWindowFlags window_flags_ = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_AlwaysAutoResize;
     std::array<GLuint,2> textures_;
 
@@ -279,7 +279,7 @@ class pattern_tables_window
       for(int i = 0; i < 2; ++i)
       {
         // get the current contents of the pattern table
-        std::array pattern_table = sys.graphics_bus().pattern_table_as_image(i, selected_palette);
+        std::array pattern_table = sys.pattern_table_as_image(i, selected_palette);
 
         glBindTexture(GL_TEXTURE_2D, textures_[i]);
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width_, height_, GL_RGB, GL_UNSIGNED_BYTE, pattern_table.data());

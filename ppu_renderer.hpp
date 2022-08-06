@@ -1,10 +1,8 @@
 #pragma once
 
+#include "graphics_bus.hpp"
 #include <cstdint>
 #include <span>
-
-// use a forward declaration of graphics_bus here because graphics_bus.hpp indirectly #includes this file
-class graphics_bus;
 
 // ppu_render implements the PPU's rendering algorithm
 class ppu_renderer

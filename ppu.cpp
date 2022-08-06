@@ -1,16 +1,47 @@
-#include "graphics_bus.hpp"
 #include "ppu.hpp"
 #include <cstdint>
 
 std::uint8_t ppu::read(std::uint16_t address) const
 {
-  return bus_.read(address);
+  std::uint8_t result = 0;
+
+  if(0x3F00 <= address and address < 0x4000)
+  {
+    // handle palette reads ourself
+    address &= 0x001F;
+    if(address == 0x0010) address = 0x0000;
+    if(address == 0x0014) address = 0x0004;
+    if(address == 0x0018) address = 0x0008;
+    if(address == 0x001C) address = 0x000C;
+
+    result = renderer_.palette(address);
+  }
+  else
+  {
+    result = bus_.read(address);
+  }
+
+  return result;
 }
 
 
-void ppu::write(std::uint16_t address, std::uint8_t value) const
+void ppu::write(std::uint16_t address, std::uint8_t value)
 {
-  bus_.write(address, value);
+  if(0x3F00 <= address and address < 0x4000)
+  {
+    // handle palette writes ourself
+    address &= 0x001F;
+    if(address == 0x0010) address = 0x0000;
+    if(address == 0x0014) address = 0x0004;
+    if(address == 0x0018) address = 0x0008;
+    if(address == 0x001C) address = 0x000C;
+
+    renderer_.set_palette(address, value);
+  }
+  else
+  {
+    bus_.write(address, value);
+  }
 }
 
 
