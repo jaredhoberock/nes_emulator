@@ -11,14 +11,25 @@
 class system
 {
   public:
+    constexpr static int framebuffer_width  = 256;
+    constexpr static int framebuffer_height = 240;
+
     system(const char* rom_filename)
       : cpu_{bus_},
-        ppu_{graphics_bus_},
+        ppu_{graphics_bus_, framebuffer_},
         cart_{rom_filename},
         bus_{cart_, ppu_},
         vram_{},
         graphics_bus_{cart_, vram_}
-    {}
+    {
+      for(int row = 0; row < framebuffer_height; ++row)
+      {
+        for(int col = 0; col < framebuffer_width; ++col)
+        {
+          framebuffer_[row * framebuffer_width + col] = {0, 255, 0};
+        }
+      }
+    }
 
     inline mos6502& cpu()
     {
@@ -53,6 +64,11 @@ class system
     inline const class graphics_bus& graphics_bus() const
     {
       return graphics_bus_;
+    }
+
+    inline std::span<const ppu::rgb, framebuffer_width*framebuffer_height> framebuffer() const
+    {
+      return framebuffer_;
     }
 
     constexpr static std::uint16_t nametable_size = 1024;
@@ -107,6 +123,8 @@ class system
 
 
   private:
+    std::array<ppu::rgb, framebuffer_width * framebuffer_height> framebuffer_;
+
     mos6502 cpu_;
     class ppu ppu_;
     cartridge cart_;

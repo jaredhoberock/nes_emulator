@@ -14,11 +14,10 @@ class ppu
 
     using rgb = ppu_renderer::rgb;
 
-    ppu(graphics_bus& gb)
+    ppu(graphics_bus& gb, std::span<rgb, framebuffer_width*framebuffer_height> framebuffer)
       : nmi{},
         bus_{gb},
-        framebuffer_{},
-        renderer_{bus_,framebuffer_},
+        renderer_{bus_,framebuffer},
         control_register_{},
         mask_register_{},
         status_register_{},
@@ -29,15 +28,7 @@ class ppu
         vram_address_{},
         tram_address_{},
         fine_x_{}
-    {
-      for(int row = 0; row < framebuffer_height; ++row)
-      {
-        for(int col = 0; col < framebuffer_width; ++col)
-        {
-          framebuffer_[row * framebuffer_width + col] = {0, 255, 0};
-        }
-      }
-    }
+    {}
 
     inline std::uint8_t control_register() const
     {
@@ -156,11 +147,6 @@ class ppu
       vram_address_.as_uint16 += control_register_.vram_address_increment_mode ? 32 : 1;
     }
 
-    inline const rgb* framebuffer_data() const
-    {
-      return framebuffer_.data();
-    }
-
     // XXX eliminate this function
     inline std::array<rgb, 4> palette_as_image(int palette) const
     {
@@ -183,8 +169,6 @@ class ppu
     void write(std::uint16_t address, std::uint8_t value);
 
     graphics_bus& bus_;
-    // XXX should the framebuffer should be on the graphics bus?
-    std::array<rgb, framebuffer_width * framebuffer_height> framebuffer_;
     ppu_renderer renderer_;
 
     union control_register_t

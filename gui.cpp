@@ -336,7 +336,7 @@ class framebuffer_window
     {
       // copy the current state of the framebuffer into our texture
       glBindTexture(GL_TEXTURE_2D, texture_);
-      glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width_, height_, GL_RGB, GL_UNSIGNED_BYTE, sys.ppu().framebuffer_data());
+      glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width_, height_, GL_RGB, GL_UNSIGNED_BYTE, sys.framebuffer().data());
       if(glGetError())
       {
         throw std::runtime_error(fmt::format("framebuffer_window: GL error after glCopyTexImage2D"));
