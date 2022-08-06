@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <fmt/format.h>
 #include <fstream>
+#include <optional>
 #include <stdexcept>
 #include <vector>
 
@@ -17,24 +18,24 @@ class nrom
       : num_prg_banks_{num_prg_banks}
     {}
 
-    inline std::uint16_t map(std::uint16_t address) const
+    // this returns optional<uint16_t> because some games try to read to
+    // addresses which have no physical location. this condition is called an "open bus"
+    inline std::optional<std::uint16_t> map(std::uint16_t address) const
     {
-      std::uint16_t result = 0;
+      std::optional<std::uint16_t> result;
 
       if(address >= 0x8000)
       {
-        // map incoming address 0x8000 to the first byte of PRG memory
-        result = address - 0x8000;
+        // map incoming addresses beginning at 0x8000 to the first bye of PRG memory
+        address -= 0x8000;
 
         if(num_prg_banks_ == 1)
         {
-          // this mask does mirroring for a single bank
-          result &= 0x3FFF;
+          // this mask does mirroring for when we have a single bank
+          address &= 0x3FFF;
         }
-      }
-      else
-      {
-        throw std::runtime_error(fmt::format("nrom::map: Bad address: {:04X}", address));
+
+        result = address;
       }
 
       return result;
@@ -148,7 +149,18 @@ class cartridge
 
     inline std::uint8_t read(std::uint16_t address) const
     {
-      return prg_memory_[mapper_.map(address)];
+      auto mapped_address = mapper_.map(address);
+
+      // detect an open bus and return 0 in this case
+      // see https://www.nesdev.org/wiki/Open_bus_behavior
+      // XXX what we do here does not model the actual NES behavior
+      // per that webpage, on an actual NES, reading an open bus repeats the
+      // last value that was read on the bus before this read
+      // instead, we'll just return 0
+      // to model the NES behavior, we'd need some extra state in the bus class
+      // to remember the previous value returned from bus::read and return that
+      // in an open bus case
+      return mapped_address ? prg_memory_[*mapped_address] : 0;
     }
 
     inline void write(std::uint16_t address, std::uint8_t value)
@@ -156,11 +168,18 @@ class cartridge
       // XXX this hack allows us to override the reset vector while debugging
       if(address == 0xFFFC or address == 0xFFFD)
       {
-        prg_memory_[mapper_.map(address)] = value;
+        auto mapped_address = mapper_.map(address);
+
+        if(not mapped_address)
+        {
+          throw std::runtime_error(fmt::format("cartridge::write: Bad address: {:04X}", address));
+        }
+
+        prg_memory_[*mapped_address] = value;
       }
       else
       {
-        throw std::runtime_error("cartridge::write: Bad address");
+        throw std::runtime_error(fmt::format("cartridge::write: Bad address: {:04X}", address));
       }
     }
 
