@@ -71,9 +71,9 @@ class ppu_renderer
     static_assert(sizeof(loopy_register) == sizeof(std::uint16_t));
 
     // executes the next ppu cycle and returns whether or not the ppu should update the vertical blank flag
-    std::optional<bool> step_cycle(bool render_background, bool render_sprites,
-                                   loopy_register& vram_address_, loopy_register tram_address_,
-                                   bool background_pattern_table_address, std::uint8_t fine_x_);
+    std::optional<bool> step_cycle(bool show_background, bool show_sprites,
+                                   loopy_register& vram_address, loopy_register tram_address,
+                                   bool background_pattern_table_address, std::uint8_t fine_x);
 
   private:
     // read is called by step_cycle's helper functions
