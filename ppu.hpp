@@ -22,13 +22,13 @@ class ppu
         control_register_{},
         mask_register_{},
         status_register_{},
-        oam_memory_address_register_{},
-        oam_memory_data_register_{},
+        oam_address_register_{},
         data_buffer_{},
         address_latch_{},
         vram_address_{},
         tram_address_{},
-        fine_x_{}
+        fine_x_{},
+        object_attribute_memory_{{}}
     {}
 
     inline std::uint8_t control_register() const
@@ -66,24 +66,25 @@ class ppu
       return result;
     }
 
-    inline std::uint8_t oam_memory_address_register() const
+    inline std::uint8_t oam_address_register() const
     {
-      return oam_memory_address_register_;
+      return oam_address_register_;
     }
 
-    inline void set_oam_memory_address_register(std::uint8_t value)
+    inline void set_oam_address_register(std::uint8_t value)
     {
-      oam_memory_address_register_ = value;
+      oam_address_register_ = value;
     }
 
-    inline std::uint8_t oam_memory_data_register() const
+    inline std::uint8_t oam_data_register() const
     {
-      return oam_memory_data_register_;
+      return object_attribute_memory_[oam_address_register_];
     }
 
-    inline void set_oam_memory_data_register(std::uint8_t value)
+    inline void set_oam_data_register(std::uint8_t value)
     {
-      oam_memory_data_register_ = value;
+      object_attribute_memory_[oam_address_register_] = value;
+      ++oam_address_register_;
     }
 
     inline std::uint8_t scroll_register() const
@@ -154,7 +155,7 @@ class ppu
       return renderer_.as_rgb(palette, pixel);
     }
 
-    void step_cycle()
+    inline void step_cycle()
     {
       std::optional vertical_blank = renderer_.step_cycle(mask_register_.show_background, mask_register_.show_sprites,
                                                           vram_address_, tram_address_,
@@ -168,6 +169,11 @@ class ppu
           nmi = true;
         }
       }
+    }
+
+    inline void write_object_attribute(std::uint8_t address, std::uint8_t value)
+    {
+      object_attribute_memory_[address] = value;
     }
 
     bool nmi;
@@ -278,12 +284,14 @@ class ppu
     control_register_t control_register_;
     mask_register_t mask_register_;
     status_register_t status_register_;
-    std::uint8_t oam_memory_address_register_;
-    std::uint8_t oam_memory_data_register_;
+    std::uint8_t oam_address_register_;
     std::uint8_t data_buffer_;
     bool address_latch_;
     ppu_renderer::loopy_register vram_address_;
     ppu_renderer::loopy_register tram_address_;
     std::uint8_t fine_x_;
+
+    // oam state
+    std::array<std::uint8_t,256> object_attribute_memory_;
 };
 
