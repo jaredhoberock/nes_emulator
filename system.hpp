@@ -83,11 +83,12 @@ class system
       return graphics_bus_;
     }
 
-    inline std::array<std::uint8_t,256> zero_page() const
+    inline std::span<const std::uint8_t,256> zero_page() const
     {
-      std::array<std::uint8_t,256> result;
-      std::copy_n(wram_.begin(), result.size(), result.begin());
-      return result;
+      std::span all = wram_;
+
+      // the first 256 bytes of wram is the zero page
+      return all.first<256>();
     }
 
     inline std::span<const ppu::rgb, framebuffer_width*framebuffer_height> framebuffer() const
