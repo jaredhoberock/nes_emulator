@@ -15,22 +15,25 @@ class bus
     std::span<const std::uint8_t,2> controllers_;
     std::array<std::uint8_t,2> controller_shift_registers_;
     cartridge& cart_;
-    // XXX internal_ram_ should be a span
-    std::array<uint8_t, 2048> internal_ram_;
+    std::span<uint8_t, 2048> wram_;
     ppu& ppu_;
 
   public:
-    bus(std::span<const std::uint8_t,2> controllers, cartridge& cart, ppu& p)
+    bus(std::span<const std::uint8_t,2> controllers,
+        cartridge& cart,
+        std::span<std::uint8_t,2048> wram,
+        ppu& p)
       : controllers_{controllers},
         cart_{cart},
-        internal_ram_{{}},
+        wram_{wram},
         ppu_{p}
     {}
 
+    // XXX hoist this to system
     inline std::array<std::uint8_t,256> zero_page() const
     {
       std::array<std::uint8_t,256> result;
-      std::copy_n(internal_ram_.begin(), result.size(), result.begin());
+      std::copy_n(wram_.begin(), result.size(), result.begin());
       return result;
     }
 
@@ -41,7 +44,7 @@ class bus
       if(0x0000 <= address and address < 0x2000)
       {
         // this bitwise and implements mirroring
-        result = internal_ram_[address & 0x07FF];
+        result = wram_[address & 0x07FF];
       }
       else if(0x2000 <= address and address < 0x4000)
       {
@@ -98,7 +101,7 @@ class bus
       if(0x0000 <= address and address < 0x2000)
       {
         // this bitwise and implements mirroring
-        internal_ram_[address & 0x07FF] = value;
+        wram_[address & 0x07FF] = value;
       }
       else if(0x2000 <= address and address < 0x4000)
       {

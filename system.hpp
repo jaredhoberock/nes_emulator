@@ -28,8 +28,9 @@ class system
       : cpu_{bus_},
         ppu_{graphics_bus_, framebuffer_},
         controllers_{{}},
+        wram_{{}},
         cart_{rom_filename},
-        bus_{controllers_, cart_, ppu_},
+        bus_{controllers_, cart_, wram_, ppu_},
         vram_{},
         graphics_bus_{cart_, vram_}
     {
@@ -148,6 +149,7 @@ class system
     mos6502 cpu_;
     class ppu ppu_;
     std::array<std::uint8_t,2> controllers_;
+    std::array<std::uint8_t,2048> wram_;
     cartridge cart_;
     class bus bus_;
     std::array<std::uint8_t, 2*nametable_size> vram_;
