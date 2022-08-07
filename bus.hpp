@@ -5,20 +5,26 @@
 #include <array>
 #include <cstdint>
 #include <fmt/format.h>
+#include <span>
 #include <stdexcept>
 
 
 class bus
 {
   private:
-    // XXX maybe all of these should be references
-    std::array<uint8_t, 2048> internal_ram_;
+    std::span<const std::uint8_t,2> controllers_;
+    std::array<std::uint8_t,2> controller_shift_registers_;
     cartridge& cart_;
+    // XXX internal_ram_ should be a span
+    std::array<uint8_t, 2048> internal_ram_;
     ppu& ppu_;
 
   public:
-    bus(cartridge& cart, ppu& p)
-      : internal_ram_{{}}, cart_{cart}, ppu_{p}
+    bus(std::span<const std::uint8_t,2> controllers, cartridge& cart, ppu& p)
+      : controllers_{controllers},
+        cart_{cart},
+        internal_ram_{{}},
+        ppu_{p}
     {}
 
     inline std::array<std::uint8_t,256> zero_page() const
@@ -28,7 +34,7 @@ class bus
       return result;
     }
 
-    std::uint8_t read(std::uint16_t address) const
+    std::uint8_t read(std::uint16_t address)
     {
       std::uint8_t result = 0;
 
@@ -57,9 +63,18 @@ class bus
           }
         }
       }
-      else if(0x4000 <= address and address < 0x4018)
+      else if(0x4000 <= address and address < 0x4016)
       {
         // apu and i/o
+      }
+      else if(0x4016 <= address and address < 0x4018)
+      {
+        // controller state
+        // reading from these addresses reads the msb from one of the shift registers
+        result = (controller_shift_registers_[address & 0x0001] & 0b10000000) ? 1 : 0;
+
+        // shift left
+        controller_shift_registers_[address & 0x0001] <<= 1;
       }
       else if(0x4018 <= address and address < 0x4020)
       {
@@ -104,9 +119,14 @@ class bus
           }
         }
       }
-      else if(0x4000 <= address and address < 0x4018)
+      else if(0x4000 <= address and address < 0x4016)
       {
         // apu and i/o
+      }
+      else if(0x4016 <= address and address < 0x4018)
+      {
+        // writing to these addresses captures the current controller state into the shift registers
+        controller_shift_registers_[address & 0x0001] = controllers_[address & 0x0001];
       }
       else if(0x4018 <= address and address < 0x4020)
       {

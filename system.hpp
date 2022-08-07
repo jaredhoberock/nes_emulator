@@ -17,8 +17,9 @@ class system
     system(const char* rom_filename)
       : cpu_{bus_},
         ppu_{graphics_bus_, framebuffer_},
+        controllers_{{}},
         cart_{rom_filename},
-        bus_{cart_, ppu_},
+        bus_{controllers_, cart_, ppu_},
         vram_{},
         graphics_bus_{cart_, vram_}
     {
@@ -29,6 +30,11 @@ class system
           framebuffer_[row * framebuffer_width + col] = {0, 255, 0};
         }
       }
+    }
+
+    inline void set_controller(std::uint8_t idx, std::uint8_t state)
+    {
+      controllers_[idx] = state;
     }
 
     inline mos6502& cpu()
@@ -131,6 +137,7 @@ class system
 
     mos6502 cpu_;
     class ppu ppu_;
+    std::array<std::uint8_t,2> controllers_;
     cartridge cart_;
     class bus bus_;
     std::array<std::uint8_t, 2*nametable_size> vram_;

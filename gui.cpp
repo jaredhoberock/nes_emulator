@@ -44,6 +44,63 @@ bool is_complete(std::future<void>& f)
 }
 
 
+void update_controller_state(class system& sys)
+{
+  std::uint8_t controller_zero_state = 0;
+
+  // A
+  if(ImGui::IsKeyPressed(SDL_SCANCODE_X))
+  {
+    controller_zero_state |= 0b10000000;
+  }
+
+  // B
+  if(ImGui::IsKeyPressed(SDL_SCANCODE_Z))
+  {
+    controller_zero_state |= 0b01000000;
+  }
+
+  // select
+  if(ImGui::IsKeyPressed(SDL_SCANCODE_RSHIFT))
+  {
+    controller_zero_state |= 0b00100000;
+  }
+
+  // start
+  if(ImGui::IsKeyPressed(SDL_SCANCODE_RETURN))
+  {
+    controller_zero_state |= 0b00010000;
+  }
+
+  // up
+  if(ImGui::IsKeyPressed(SDL_SCANCODE_UP))
+  {
+    controller_zero_state |= 0b00001000;
+  }
+
+  // down
+  if(ImGui::IsKeyPressed(SDL_SCANCODE_DOWN))
+  {
+    controller_zero_state |= 0b00000100;
+  }
+
+  // left
+  if(ImGui::IsKeyPressed(SDL_SCANCODE_LEFT))
+  {
+    controller_zero_state |= 0b00000010;
+  }
+
+  // right
+  if(ImGui::IsKeyPressed(SDL_SCANCODE_RIGHT))
+  {
+    controller_zero_state |= 0b00000001;
+  }
+
+
+  sys.set_controller(0, controller_zero_state);
+}
+
+
 class disassembly_window
 {
   private:
@@ -508,6 +565,8 @@ int gui(class system& sys)
         done = true;
       }
     }
+
+    update_controller_state(sys);
     
     // Start the Dear ImGui frame
     ImGui_ImplOpenGL3_NewFrame();
