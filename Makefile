@@ -2,8 +2,7 @@ nes: bus.hpp cartridge.hpp main.cpp mos6502.hpp ppu.hpp ppu_renderer.hpp ppu_ren
 	clang -std=c++20 -Wall -Wextra main.cpp ppu_renderer.cpp -lstdc++ -lfmt -o $@
 
 headless: *.hpp *.cpp Makefile
-#	clang -std=c++20 -Wall -Wextra -g headless.cpp -lstdc++ -lfmt -o $@
-	clang -std=c++20 -fsanitize=address -Wall -Wextra -g headless.cpp -lstdc++ -lfmt -o $@
+	clang -std=c++20 -Wall -Wextra -g headless.cpp ppu_renderer.cpp -lstdc++ -lfmt -o $@
 
 nestest: *.hpp *.cpp Makefile
 	clang -std=c++20 -Wall -Wextra -g nestest.cpp -lstdc++ -lfmt -o $@
