@@ -83,6 +83,13 @@ class system
       return graphics_bus_;
     }
 
+    inline std::array<std::uint8_t,256> zero_page() const
+    {
+      std::array<std::uint8_t,256> result;
+      std::copy_n(wram_.begin(), result.size(), result.begin());
+      return result;
+    }
+
     inline std::span<const ppu::rgb, framebuffer_width*framebuffer_height> framebuffer() const
     {
       return framebuffer_;

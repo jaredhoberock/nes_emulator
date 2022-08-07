@@ -29,14 +29,6 @@ class bus
         ppu_{p}
     {}
 
-    // XXX hoist this to system
-    inline std::array<std::uint8_t,256> zero_page() const
-    {
-      std::array<std::uint8_t,256> result;
-      std::copy_n(wram_.begin(), result.size(), result.begin());
-      return result;
-    }
-
     std::uint8_t read(std::uint16_t address)
     {
       std::uint8_t result = 0;

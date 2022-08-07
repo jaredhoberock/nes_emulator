@@ -148,7 +148,7 @@ class disassembly_window
 
 void draw_zero_page(const class system& sys)
 {
-  std::array<std::uint8_t,256> zp = sys.bus().zero_page();
+  std::array<std::uint8_t,256> zp = sys.zero_page();
 
   ImGui::Begin("Zero page");
   for(std::uint8_t row = 0; row < 16; ++row)
