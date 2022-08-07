@@ -27,7 +27,7 @@ int main(int argc, const char** argv)
     std::cerr << "Caught exception: " << e.what() << std::endl;
     std::cerr << std::endl;
 
-    auto zp = sys.bus().zero_page();
+    auto zp = sys.zero_page();
     fmt::print("Zero page\n");
     for(std::uint8_t row = 0; row < 16; ++row)
     {
