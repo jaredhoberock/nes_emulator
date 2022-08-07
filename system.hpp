@@ -121,6 +121,10 @@ class system
       return result;
     }
 
+    std::array<ppu::rgb,4> palette_as_image(int palette_idx) const
+    {
+      return {ppu_.as_rgb(palette_idx,0), ppu_.as_rgb(palette_idx,1), ppu_.as_rgb(palette_idx,2), ppu_.as_rgb(palette_idx,3)};
+    }
 
   private:
     std::array<ppu::rgb, framebuffer_width * framebuffer_height> framebuffer_;

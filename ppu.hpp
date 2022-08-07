@@ -149,12 +149,6 @@ class ppu
     }
 
     // XXX eliminate this function
-    inline std::array<rgb, 4> palette_as_image(int palette) const
-    {
-      return renderer_.palette_as_image(palette);
-    }
-
-    // XXX eliminate this function
     inline rgb as_rgb(int palette, std::uint8_t pixel) const
     {
       return renderer_.as_rgb(palette, pixel);

@@ -206,7 +206,7 @@ class palettes_window
       for(size_t i = 0; i < textures_.size(); ++i)
       {
         // get the current contents of the selected palette
-        std::array palette = sys.ppu().palette_as_image(i);
+        std::array palette = sys.palette_as_image(i);
 
         glBindTexture(GL_TEXTURE_2D, textures_[i]);
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, num_colors_, 1, GL_RGB, GL_UNSIGNED_BYTE, palette.data());

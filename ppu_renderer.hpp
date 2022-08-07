@@ -47,11 +47,6 @@ class ppu_renderer
       return system_palette_[palette_[4*palette_idx + color_idx]];
     }
 
-    inline std::array<rgb,4> palette_as_image(int palette_idx) const
-    {
-      return {as_rgb(palette_idx,0), as_rgb(palette_idx,1), as_rgb(palette_idx,2), as_rgb(palette_idx,3)};
-    }
-
     union loopy_register
     {
       uint16_t as_uint16;
@@ -110,8 +105,9 @@ class ppu_renderer
 
     inline void read_next_background_tile_id(loopy_register vram_address)
     {
-      // XXX seems like this | should just be a +
-      background_tile_id_latch_ = read(0x2000 | (vram_address.as_uint16 & 0x0FFF));
+      // only take the low 14 bits of vram_address
+      // 0x2000 is the base address of vram
+      background_tile_id_latch_ = read(0x2000 + (vram_address.as_uint16 & 0x0FFF));
     }
 
     inline void read_next_background_tile_attribute(loopy_register vram_address)
