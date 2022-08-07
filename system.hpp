@@ -151,6 +151,11 @@ class system
       return {ppu_.as_rgb(palette_idx,0), ppu_.as_rgb(palette_idx,1), ppu_.as_rgb(palette_idx,2), ppu_.as_rgb(palette_idx,3)};
     }
 
+    std::span<const ppu::object_attribute,64> object_attributes() const
+    {
+      return ppu_.object_attributes();
+    }
+
   private:
     std::array<ppu::rgb, framebuffer_width * framebuffer_height> framebuffer_;
 

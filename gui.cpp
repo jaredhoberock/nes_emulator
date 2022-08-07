@@ -181,32 +181,15 @@ void draw_nametable(const class system& sys, int which)
 }
 
 
-void maybe_print_nametable(const class system& sys)
+void draw_object_attributes(const class system& sys)
 {
-  ImGui::Begin("Print Nametable");
-  if(ImGui::Button("Print Nametable 0"))
+  std::span attributes = sys.object_attributes();
+
+  ImGui::Begin("Object Attributes");
+  for(int i = 0; i < 20; ++i)
   {
-    fmt::print("nametable 0:\n");
-    for(int row = 0; row < 30; ++row)
-    {
-      for(int tile = 0; tile < 32; ++tile)
-      {
-        fmt::print("{:02X} ", sys.nametable(0)[row * 32 + tile]);
-      }
-      fmt::print("\n");
-    }
-  }
-  if(ImGui::Button("Print Nametable 1"))
-  {
-    fmt::print("nametable 1:\n");
-    for(int row = 0; row < 30; ++row)
-    {
-      for(int tile = 0; tile < 32; ++tile)
-      {
-        fmt::print("{:02X} ", sys.nametable(1)[row * 32 + tile]);
-      }
-      fmt::print("\n");
-    }
+    const auto& a = attributes[i];
+    ImGui::Text("%02d: (%03d,%03d) Tile: %02X, Attribute: %02X", i, a.x_position, a.y_position, a.tile_id, a.attribute);
   }
   ImGui::End();
 }
@@ -608,9 +591,9 @@ int gui(class system& sys)
     // draw the pattern tables
     pattern_tables.draw(sys, selected_palette);
 
-    //maybe_print_nametable(sys);
     draw_nametable(sys, 0);
     draw_nametable(sys, 1);
+    draw_object_attributes(sys);
     draw_zero_page(sys);
     disassembly.draw(sys);
     

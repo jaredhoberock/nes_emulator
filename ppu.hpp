@@ -28,7 +28,7 @@ class ppu
         vram_address_{},
         tram_address_{},
         fine_x_{},
-        object_attribute_memory_{{}}
+        object_attributes_{{}}
     {}
 
     inline std::uint8_t control_register() const
@@ -78,12 +78,14 @@ class ppu
 
     inline std::uint8_t oam_data_register() const
     {
-      return object_attribute_memory_[oam_address_register_];
+      const std::uint8_t* ptr = reinterpret_cast<const std::uint8_t*>(object_attributes_.data());
+      return ptr[oam_address_register_];
     }
 
     inline void set_oam_data_register(std::uint8_t value)
     {
-      object_attribute_memory_[oam_address_register_] = value;
+      std::uint8_t* ptr = reinterpret_cast<std::uint8_t*>(object_attributes_.data());
+      ptr[oam_address_register_] = value;
       ++oam_address_register_;
     }
 
@@ -171,12 +173,20 @@ class ppu
       }
     }
 
-    inline void write_object_attribute(std::uint8_t address, std::uint8_t value)
-    {
-      object_attribute_memory_[address] = value;
-    }
-
     bool nmi;
+
+    struct object_attribute
+    {
+      std::uint8_t y_position;
+      std::uint8_t tile_id;
+      std::uint8_t attribute;
+      std::uint8_t x_position;
+    };
+
+    inline std::span<const object_attribute,64> object_attributes() const
+    {
+      return object_attributes_;
+    }
 
   private:
     inline std::uint8_t read(std::uint16_t address) const
@@ -292,6 +302,7 @@ class ppu
     std::uint8_t fine_x_;
 
     // oam state
-    std::array<std::uint8_t,256> object_attribute_memory_;
+    std::array<object_attribute,64> object_attributes_;
+    static_assert(64 * sizeof(object_attribute) == 256);
 };
 
