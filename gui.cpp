@@ -48,54 +48,45 @@ void update_controller_state(class system& sys)
 {
   std::uint8_t controller_zero_state = 0;
 
-  // A
   if(ImGui::IsKeyPressed(SDL_SCANCODE_X))
   {
-    controller_zero_state |= 0b10000000;
+    controller_zero_state |= system::a_button_bitmask;
   }
 
-  // B
   if(ImGui::IsKeyPressed(SDL_SCANCODE_Z))
   {
-    controller_zero_state |= 0b01000000;
+    controller_zero_state |= system::b_button_bitmask;
   }
 
-  // select
   if(ImGui::IsKeyPressed(SDL_SCANCODE_RSHIFT))
   {
-    controller_zero_state |= 0b00100000;
+    controller_zero_state |= system::select_button_bitmask;
   }
 
-  // start
   if(ImGui::IsKeyPressed(SDL_SCANCODE_RETURN))
   {
-    controller_zero_state |= 0b00010000;
+    controller_zero_state |= system::start_button_bitmask;
   }
 
-  // up
   if(ImGui::IsKeyPressed(SDL_SCANCODE_UP))
   {
-    controller_zero_state |= 0b00001000;
+    controller_zero_state |= system::up_button_bitmask;
   }
 
-  // down
   if(ImGui::IsKeyPressed(SDL_SCANCODE_DOWN))
   {
-    controller_zero_state |= 0b00000100;
+    controller_zero_state |= system::down_button_bitmask;
   }
 
-  // left
   if(ImGui::IsKeyPressed(SDL_SCANCODE_LEFT))
   {
-    controller_zero_state |= 0b00000010;
+    controller_zero_state |= system::left_button_bitmask;
   }
 
-  // right
   if(ImGui::IsKeyPressed(SDL_SCANCODE_RIGHT))
   {
-    controller_zero_state |= 0b00000001;
+    controller_zero_state |= system::right_button_bitmask;
   }
-
 
   sys.set_controller(0, controller_zero_state);
 }

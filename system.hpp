@@ -14,6 +14,16 @@ class system
     constexpr static int framebuffer_width  = 256;
     constexpr static int framebuffer_height = 240;
 
+    // see https://www.nesdev.org/wiki/Standard_controller#Report
+    constexpr static std::uint8_t a_button_bitmask      = 0b10000000;
+    constexpr static std::uint8_t b_button_bitmask      = 0b01000000;
+    constexpr static std::uint8_t select_button_bitmask = 0b00100000;
+    constexpr static std::uint8_t start_button_bitmask  = 0b00010000;
+    constexpr static std::uint8_t up_button_bitmask     = 0b00001000;
+    constexpr static std::uint8_t down_button_bitmask   = 0b00000100;
+    constexpr static std::uint8_t left_button_bitmask   = 0b00000010;
+    constexpr static std::uint8_t right_button_bitmask  = 0b00000001;
+
     system(const char* rom_filename)
       : cpu_{bus_},
         ppu_{graphics_bus_, framebuffer_},
