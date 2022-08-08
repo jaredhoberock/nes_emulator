@@ -27,8 +27,7 @@ class ppu
         address_latch_{},
         vram_address_{},
         tram_address_{},
-        fine_x_{},
-        object_attributes_{{}}
+        fine_x_{}
     {}
 
     inline std::uint8_t control_register() const
@@ -78,13 +77,14 @@ class ppu
 
     inline std::uint8_t oam_data_register() const
     {
-      const std::uint8_t* ptr = reinterpret_cast<const std::uint8_t*>(object_attributes_.data());
+      const std::uint8_t* ptr = reinterpret_cast<const std::uint8_t*>(object_attributes().data());
       return ptr[oam_address_register_];
     }
 
     inline void set_oam_data_register(std::uint8_t value)
     {
-      std::uint8_t* ptr = reinterpret_cast<std::uint8_t*>(object_attributes_.data());
+      const std::uint8_t* c_ptr = reinterpret_cast<const std::uint8_t*>(object_attributes().data());
+      std::uint8_t* ptr = const_cast<std::uint8_t*>(c_ptr);
       ptr[oam_address_register_] = value;
       ++oam_address_register_;
     }
@@ -175,17 +175,11 @@ class ppu
 
     bool nmi;
 
-    struct object_attribute
-    {
-      std::uint8_t y_position;
-      std::uint8_t tile_id;
-      std::uint8_t attribute;
-      std::uint8_t x_position;
-    };
+    using object_attribute = ppu_renderer::object_attribute;
 
     inline std::span<const object_attribute,64> object_attributes() const
     {
-      return object_attributes_;
+      return renderer_.object_attributes();
     }
 
   private:
@@ -300,9 +294,5 @@ class ppu
     ppu_renderer::loopy_register vram_address_;
     ppu_renderer::loopy_register tram_address_;
     std::uint8_t fine_x_;
-
-    // oam state
-    std::array<object_attribute,64> object_attributes_;
-    static_assert(64 * sizeof(object_attribute) == 256);
 };
 

@@ -19,6 +19,7 @@ class ppu_renderer
     ppu_renderer(graphics_bus& bus, std::span<rgb, framebuffer_width*framebuffer_height> framebuffer)
       : bus_{bus},
         palette_{},
+        object_attributes_{{}},
         framebuffer_{framebuffer},
         background_tile_id_latch_{},
         background_tile_attribute_latch_{},
@@ -70,6 +71,19 @@ class ppu_renderer
                                    loopy_register& vram_address, loopy_register tram_address,
                                    bool background_pattern_table_address, std::uint8_t fine_x);
 
+    struct object_attribute
+    {
+      std::uint8_t y_position;
+      std::uint8_t tile_id;
+      std::uint8_t attribute;
+      std::uint8_t x_position;
+    };
+
+    inline std::span<const object_attribute,64> object_attributes() const
+    {
+      return object_attributes_;
+    }
+
   private:
     // read is called by step_cycle's helper functions
     inline std::uint8_t read(std::uint16_t address) const
@@ -87,6 +101,7 @@ class ppu_renderer
 
     graphics_bus& bus_;
     std::array<std::uint8_t, 32> palette_;
+    std::array<object_attribute, 64> object_attributes_;
     std::span<rgb, framebuffer_width*framebuffer_height> framebuffer_;
 
     // this state is mutated by step_cycle and controls its behavior
