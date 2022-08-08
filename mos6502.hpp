@@ -1005,7 +1005,6 @@ struct mos6502
 
   void execute_break()
   {
-    // XXX check the implementation of this function
     program_counter_++;
 
     // push the program counter to the stack
