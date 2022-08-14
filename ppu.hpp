@@ -38,6 +38,8 @@ class ppu
     inline void set_control_register(std::uint8_t value)
     {
       control_register_.as_byte = value;
+      tram_address_.nametable_x = control_register_.nametable_x;
+      tram_address_.nametable_y = control_register_.nametable_y;
     }
 
     inline std::uint8_t mask_register() const
