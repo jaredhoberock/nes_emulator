@@ -161,17 +161,17 @@ class ppu
 
     inline void step_cycle()
     {
-      std::optional vertical_blank = renderer_.step_cycle(mask_register_.show_background, mask_register_.show_sprites,
-                                                          vram_address_, tram_address_,
-                                                          control_register_.background_pattern_table_address, fine_x_);
+      ppu_renderer::control_register_t control{};
+      control.as_byte = control_register_.as_byte;
 
-      if(vertical_blank)
+      bool entered_vertical_blank_period = renderer_.step_cycle(mask_register_.show_background, mask_register_.show_sprites,
+                                                                vram_address_, tram_address_,
+                                                                control_register_.background_pattern_table_address, fine_x_,
+                                                                control, status_register_, mask_register_);
+
+      if(entered_vertical_blank_period and control_register_.generate_nmi)
       {
-        status_register_.in_vertical_blank_period = vertical_blank.value();
-        if(control_register_.generate_nmi and status_register_.in_vertical_blank_period)
-        {
-          nmi = true;
-        }
+        nmi = true;
       }
     }
 
@@ -250,41 +250,9 @@ class ppu
 
     static_assert(sizeof(control_register_t) == sizeof(std::uint8_t));
 
-    union mask_register_t
-    {
-      std::uint8_t as_byte;
-      struct
-      {
-        bool greyscale : 1;
-        bool show_background_in_leftmost_8_pixels_of_screen : 1;
-        bool show_sprites_in_leftmost_8_pixels_of_screen : 1;
-        bool show_background : 1;
-        bool show_sprites : 1;
-        bool emphasize_red : 1;
-        bool emphasize_green : 1;
-        bool emphasize_blue : 1;
-      };
+    using mask_register_t = ppu_renderer::mask_register_t;
 
-      mask_register_t() : as_byte{} {}
-    };
-
-    static_assert(sizeof(mask_register_t) == sizeof(std::uint8_t));
-
-    union status_register_t
-    {
-      std::uint8_t as_byte;
-      struct
-      {
-        std::uint8_t unused : 5;
-        bool sprite_overflow : 1;
-        bool sprite_0_hit : 1;
-        bool in_vertical_blank_period : 1;
-      };
-
-      status_register_t() : as_byte{} {}
-    };
-
-    static_assert(sizeof(status_register_t) == sizeof(std::uint8_t));
+    using status_register_t = ppu_renderer::status_register_t;
 
     // register state
     control_register_t control_register_;
