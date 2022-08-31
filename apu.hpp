@@ -435,16 +435,164 @@ class pulse_channel
 };
 
 
+class linear_counter
+{
+  public:
+    inline linear_counter()
+      : control_{false}, do_reload_{false}, period_{0}, counter_{0}
+    {}
+
+    inline void set(bool control, std::uint8_t period)
+    {
+      assert(period <= 0b01111111);
+
+      control_ = control;
+      period_ = period;
+    }
+
+    inline void reset()
+    {
+      do_reload_ = true;
+    }
+
+    inline void clock()
+    {
+      if(do_reload_)
+      {
+        counter_ = period_;
+      }
+      else if(counter_ != 0)
+      {
+        --counter_;
+      }
+
+      if(not control_)
+      {
+        do_reload_ = false;
+      }
+    }
+
+    inline bool value() const
+    {
+      return counter_ != 0;
+    }
+
+  private:
+    bool control_;
+    bool do_reload_;
+    std::uint8_t period_;
+    std::uint8_t counter_;
+};
+
+
+class triangle_wave
+{
+  public:
+    inline triangle_wave()
+      : step_{0}
+    {}
+
+    inline void reset()
+    {
+      step_ = 0;
+    }
+
+    inline void clock()
+    {
+      ++step_;
+      step_ %= 32;
+    }
+
+    inline std::uint8_t value() const
+    {
+      // see https://www.nesdev.org/wiki/APU_Triangle
+      constexpr std::uint8_t sequence[] = {
+        15, 14, 13, 12, 11, 10,  9,  8,  7,  6,  5,  4,  3,  2,  1,  0,
+         0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15
+      };
+
+      return sequence[step_];
+    }
+
+  private:
+    std::uint8_t step_;
+};
+
+
+class triangle_channel
+{
+  public:
+    inline void enable(bool enabled)
+    {
+      length_counter_.enable(enabled);
+    }
+
+    inline bool length_counter_status() const
+    {
+      return length_counter_.value() > 0;
+    }
+
+    inline void set_linear_counter(bool control, std::uint8_t period)
+    {
+      linear_counter_.set(control, period);
+      length_counter_.halt(control);
+    }
+
+    inline void set_length_counter_and_timer_high_bits(std::uint8_t table_index, std::uint8_t timer_bits)
+    {
+      length_counter_.maybe_set_value_from_lookup_table(table_index);
+      timer_.set_high_three_bits_of_period(timer_bits);
+
+      linear_counter_.reset();
+    }
+
+    inline void set_timer_low_bits(std::uint8_t timer_bits)
+    {
+      timer_.set_low_eight_bits_of_period(timer_bits);
+    }
+
+    inline void clock()
+    {
+      if(timer_.clock())
+      {
+        sequencer_.clock();
+      }
+    }
+
+    inline void clock_half_frame_signals()
+    {
+      length_counter_.clock();
+    }
+
+    inline void clock_quarter_frame_signals()
+    {
+      linear_counter_.clock();
+    }
+
+    inline std::uint8_t value() const
+    {
+      return linear_counter_.value() * length_counter_.value() * sequencer_.value();
+    }
+
+  private:
+    timer timer_;
+    linear_counter linear_counter_;
+    length_counter length_counter_;
+    triangle_wave sequencer_;
+};
+
+
 class frame_counter
 {
   public:
-    inline frame_counter(pulse_channel& pulse_0, pulse_channel& pulse_1)
+    inline frame_counter(pulse_channel& pulse_0, pulse_channel& pulse_1, triangle_channel& triangle)
       : frame_interrupt_flag_{false},
         in_five_step_mode_{false},
         inhibit_interrupts_{false},
         num_cpu_cycles_{0},
         pulse_0_{pulse_0},
-        pulse_1_{pulse_1}
+        pulse_1_{pulse_1},
+        triangle_{triangle}
     {}
 
     // this gets called once each CPU cycle
@@ -490,12 +638,14 @@ class frame_counter
     {
       pulse_0_.clock_quarter_frame_signals();
       pulse_1_.clock_quarter_frame_signals();
+      triangle_.clock_quarter_frame_signals();
     }
 
     void clock_half_frame_signals()
     {
       pulse_0_.clock_half_frame_signals();
       pulse_1_.clock_half_frame_signals();
+      triangle_.clock_half_frame_signals();
     }
 
     constexpr static std::size_t to_cpu_cycles(double value)
@@ -592,6 +742,7 @@ class frame_counter
     std::size_t num_cpu_cycles_;
     pulse_channel& pulse_0_;
     pulse_channel& pulse_1_;
+    triangle_channel& triangle_;
 };
 
 
@@ -602,7 +753,8 @@ class apu
       : is_odd_cpu_clock_{false},
         pulse_0_{true},
         pulse_1_{false},
-        frame_counter_{pulse_0_, pulse_1_}
+        triangle_{},
+        frame_counter_{pulse_0_, pulse_1_, triangle_}
     {}
 
     inline void step_cycle()
@@ -615,6 +767,7 @@ class apu
       {
         pulse_0_.clock();
         pulse_1_.clock();
+        triangle_.clock();
       }
 
       is_odd_cpu_clock_ = !is_odd_cpu_clock_;
@@ -634,7 +787,7 @@ class apu
     {
       //dmc_.enable(enable_dmc);
       //noise_.enable(enable_noise);
-      //triangle_.enable(enable_triangle);
+      triangle_.enable(enable_triangle);
       pulse_0_.enable(enable_pulse_0);
       pulse_1_.enable(enable_pulse_1);
     }
@@ -689,15 +842,50 @@ class apu
       pulse_1_.set_sweep(enabled, period, negated, shift_count);
     }
 
+    inline bool triangle_length_counter_status() const
+    {
+      return triangle_.length_counter_status();
+    }
+
+    inline void set_triangle_linear_counter(bool control, std::uint8_t period)
+    {
+      triangle_.set_linear_counter(control, period);
+    }
+
+    inline void set_triangle_length_counter_and_timer_high_bits(std::uint8_t length_counter_table_index, std::uint8_t timer_bits)
+    {
+      triangle_.set_length_counter_and_timer_high_bits(length_counter_table_index, timer_bits);
+    }
+
+    inline void set_triangle_timer_low_bits(std::uint8_t timer_bits)
+    {
+      triangle_.set_timer_low_bits(timer_bits);
+    }
+
     inline float sample() const
     {
-      return 0.00752f * float(pulse_0_.value() + pulse_1_.value());
+      // see https://www.nesdev.org/wiki/APU_Mixer#Linear_Approximation
+      //float pulse_out = 0.00752f * float(pulse_0_.value() + pulse_1_.value());
+      //float triangle_out = 0.00851f * float(triangle_.value());
+
+      float pulse = pulse_0_.value() + pulse_1_.value();
+
+      float pulse_denom = 8128.f / pulse + 100.f;
+      float pulse_out = 95.88f / pulse_denom;
+
+      float triangle = triangle_.value();
+
+      float tnd_denom = (8227.f / triangle) + 100.f;
+      float tnd_out = 159.79f / tnd_denom;
+
+      return pulse_out + tnd_out;
     }
 
   private:
     bool is_odd_cpu_clock_;
     pulse_channel pulse_0_;
     pulse_channel pulse_1_;
+    triangle_channel triangle_;
     frame_counter frame_counter_;
 };
 

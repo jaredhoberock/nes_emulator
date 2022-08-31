@@ -126,7 +126,7 @@ class bus
         bool frame_interrupt = apu_.frame_interrupt_flag();
         bool dmc_active = false;
         bool noise_length_counter_status = false;
-        bool triangle_length_counter_status = false;
+        bool triangle_length_counter_status = apu_.triangle_length_counter_status();
         bool pulse_1_length_counter_status = apu_.pulse_1_length_counter_status();
         bool pulse_0_length_counter_status = apu_.pulse_0_length_counter_status();
 
@@ -249,7 +249,25 @@ class bus
 
         apu_.set_pulse_1_length_counter_and_timer_high_bits(index, timer_bits);
       }
-      else if(0x4007 < address and address < 0x4014)
+      else if(0x4008 == address)
+      {
+        bool control        = (0b10000000 & value) != 0;
+        std::uint8_t period = (0b01111111 & value);
+
+        apu_.set_triangle_linear_counter(control, period);
+      }
+      else if(0x400A == address)
+      {
+        apu_.set_triangle_timer_low_bits(value);
+      }
+      else if(0x400B == address)
+      {
+        std::uint8_t index = value >> 3;
+        std::uint8_t timer_bits = (0b00000111 & value);
+
+        apu_.set_triangle_length_counter_and_timer_high_bits(index, timer_bits);
+      }
+      else if(0x400B < address and address < 0x4014)
       {
         // apu and i/o
       }
