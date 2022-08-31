@@ -52,22 +52,25 @@ class timer
 {
   public:
     inline timer()
-      : period_{0}, value_{period_}
+      : period_{0}, value_{0}
     {}
 
     inline void set_high_three_bits_of_period(std::uint8_t value)
     {
       assert(value <= 0b111);
-      period_ = (value << 8) | (period_ & 0xFF);
+      std::uint16_t p = (value << 8) | (period() & 0xFF);
+      set_period(p);
     }
 
     inline void set_low_eight_bits_of_period(std::uint8_t value)
     {
-      period_ = (period_ & 0x700) | value;
+      std::uint16_t p = (period() & 0x700) | value;
+      set_period(p);
     }
 
     inline void set_period(std::uint16_t value)
     {
+      assert(value <= 0b11111111111);
       period_ = value;
     }
 
@@ -315,10 +318,10 @@ class length_counter
 };
 
 
-class square_wave
+class pulse_wave
 {
   public:
-    inline square_wave()
+    inline pulse_wave()
       : duty_cycle_{0}, step_{0}
     {}
 
@@ -429,7 +432,7 @@ class pulse_channel
   private:
     timer timer_;
     volume_envelope volume_envelope_;
-    square_wave sequencer_;
+    pulse_wave sequencer_;
     length_counter length_counter_;
     sweep sweep_;
 };
@@ -553,7 +556,10 @@ class triangle_channel
 
     inline void clock()
     {
-      if(timer_.clock())
+      // see https://www.nesdev.org/wiki/APU_Triangle
+      // "The sequencer is clocked by the timer as long as both the linear
+      // counter and the length counter are nonzero."
+      if(timer_.clock() and linear_counter_.value() and length_counter_.value())
       {
         sequencer_.clock();
       }
@@ -571,7 +577,11 @@ class triangle_channel
 
     inline std::uint8_t value() const
     {
-      return linear_counter_.value() * length_counter_.value() * sequencer_.value();
+      // see https://www.nesdev.org/wiki/APU#Triangle_($4008-400B)
+      // "silencing the channel [via the linear or length counter]
+      // merely halts it, it will continue to output its last value,
+      // rather than 0."
+      return sequencer_.value();
     }
 
   private:
@@ -582,17 +592,130 @@ class triangle_channel
 };
 
 
+class linear_feedback_shift_register
+{
+  public:
+    inline linear_feedback_shift_register()
+      : mode_{false}, value_{1}
+    {}
+
+    inline void set_mode(bool mode)
+    {
+      mode_ = mode;
+    }
+
+    inline void clock()
+    {
+      bool bit_0 = (value_ & 0b1) != 0;
+      bool bit_1 = (value_ & 0b10) != 0;
+      bool bit_6 = (value_ & 0b1000000) != 0;
+
+      bool other_bit = mode_ ? bit_6 : bit_1;
+
+      bool feedback = bit_0 ^ other_bit;
+
+      // shift the value to the right
+      value_ >>= 1;
+
+      // set bit 14 to the value of feedback
+      value_ |= (feedback << 14);
+    }
+
+    inline bool value() const
+    {
+      bool bit_0 = (value_ & 0b1) != 0;
+
+      return not bit_0;
+    }
+
+  private:
+    bool mode_;
+    std::uint16_t value_;
+};
+
+
+class noise_channel
+{
+  public:
+    inline void enable(bool enabled)
+    {
+      length_counter_.enable(enabled);
+    }
+
+    inline bool length_counter_status() const
+    {
+      return length_counter_.value() > 0;
+    }
+
+    inline void set_length_counter_halt_and_volume_envelope(bool halt, bool constant_volume, std::uint8_t volume_period)
+    {
+      length_counter_.halt(halt);
+      volume_envelope_.set(true, constant_volume, volume_period);
+    }
+
+    inline void set_mode_and_timer_period(bool mode, std::uint8_t index)
+    {
+      assert(index < 16);
+
+      shift_register_.set_mode(mode);
+
+      constexpr std::uint16_t period[] =
+      {
+        4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068
+      };
+
+      timer_.set_period(period[index]);
+    }
+
+    inline void set_length_counter(std::uint8_t index)
+    {
+      length_counter_.maybe_set_value_from_lookup_table(index);
+      volume_envelope_.reset();
+    }
+
+    inline void clock()
+    {
+      if(timer_.clock())
+      {
+        shift_register_.clock();
+      }
+    }
+
+    inline void clock_half_frame_signals()
+    {
+      length_counter_.clock();
+    }
+
+    inline void clock_quarter_frame_signals()
+    {
+      volume_envelope_.clock();
+    }
+
+    inline std::uint8_t value() const
+    {
+      return volume_envelope_.value() * length_counter_.value() * shift_register_.value();
+    }
+
+  private:
+    timer timer_;
+    linear_feedback_shift_register shift_register_;
+    length_counter length_counter_;
+    volume_envelope volume_envelope_;
+};
+
+
 class frame_counter
 {
   public:
-    inline frame_counter(pulse_channel& pulse_0, pulse_channel& pulse_1, triangle_channel& triangle)
+    inline frame_counter(pulse_channel& pulse_0, pulse_channel& pulse_1, triangle_channel& triangle, noise_channel& noise)
       : frame_interrupt_flag_{false},
         in_five_step_mode_{false},
         inhibit_interrupts_{false},
         num_cpu_cycles_{0},
         pulse_0_{pulse_0},
         pulse_1_{pulse_1},
-        triangle_{triangle}
+        triangle_{triangle},
+        noise_{noise}
     {}
 
     // this gets called once each CPU cycle
@@ -608,7 +731,6 @@ class frame_counter
       }
     }
 
-    // these options have to be set at the same time because they are mapped to a single address on the bus
     void set(bool five_step_mode, bool inhibit_interrupts)
     {
       in_five_step_mode_ = five_step_mode;
@@ -639,6 +761,7 @@ class frame_counter
       pulse_0_.clock_quarter_frame_signals();
       pulse_1_.clock_quarter_frame_signals();
       triangle_.clock_quarter_frame_signals();
+      noise_.clock_quarter_frame_signals();
     }
 
     void clock_half_frame_signals()
@@ -646,6 +769,7 @@ class frame_counter
       pulse_0_.clock_half_frame_signals();
       pulse_1_.clock_half_frame_signals();
       triangle_.clock_half_frame_signals();
+      noise_.clock_half_frame_signals();
     }
 
     constexpr static std::size_t to_cpu_cycles(double value)
@@ -743,6 +867,7 @@ class frame_counter
     pulse_channel& pulse_0_;
     pulse_channel& pulse_1_;
     triangle_channel& triangle_;
+    noise_channel& noise_;
 };
 
 
@@ -754,7 +879,8 @@ class apu
         pulse_0_{true},
         pulse_1_{false},
         triangle_{},
-        frame_counter_{pulse_0_, pulse_1_, triangle_}
+        noise_{},
+        frame_counter_{pulse_0_, pulse_1_, triangle_, noise_}
     {}
 
     inline void step_cycle()
@@ -762,12 +888,15 @@ class apu
       // the frame counter gets clocked every cpu clock
       frame_counter_.clock();
 
-      // clock each channel every other cpu clock
+      // so does the triangle
+      triangle_.clock();
+
+      // other channels clock every other cpu clock
       if(is_odd_cpu_clock_)
       {
         pulse_0_.clock();
         pulse_1_.clock();
-        triangle_.clock();
+        noise_.clock();
       }
 
       is_odd_cpu_clock_ = !is_odd_cpu_clock_;
@@ -786,7 +915,7 @@ class apu
     inline void enable_channels(bool enable_dmc, bool enable_noise, bool enable_triangle, bool enable_pulse_1, bool enable_pulse_0)
     {
       //dmc_.enable(enable_dmc);
-      //noise_.enable(enable_noise);
+      noise_.enable(enable_noise);
       triangle_.enable(enable_triangle);
       pulse_0_.enable(enable_pulse_0);
       pulse_1_.enable(enable_pulse_1);
@@ -862,20 +991,37 @@ class apu
       triangle_.set_timer_low_bits(timer_bits);
     }
 
+    inline bool noise_length_counter_status()
+    {
+      return noise_.length_counter_status();
+    }
+
+    inline void set_noise_length_counter_halt_and_volume_envelope(bool halt_length_counter, bool constant_volume, std::uint8_t volume_period)
+    {
+      noise_.set_length_counter_halt_and_volume_envelope(halt_length_counter, constant_volume, volume_period);
+    }
+
+    inline void set_noise_mode_and_timer_period(bool mode, std::uint8_t index)
+    {
+      noise_.set_mode_and_timer_period(mode, index);
+    }
+
+    inline void set_noise_length_counter(std::uint8_t index)
+    {
+      noise_.set_length_counter(index);
+    }
+
     inline float sample() const
     {
-      // see https://www.nesdev.org/wiki/APU_Mixer#Linear_Approximation
-      //float pulse_out = 0.00752f * float(pulse_0_.value() + pulse_1_.value());
-      //float triangle_out = 0.00851f * float(triangle_.value());
-
       float pulse = pulse_0_.value() + pulse_1_.value();
 
       float pulse_denom = 8128.f / pulse + 100.f;
       float pulse_out = 95.88f / pulse_denom;
 
       float triangle = triangle_.value();
+      float noise = noise_.value();
 
-      float tnd_denom = (8227.f / triangle) + 100.f;
+      float tnd_denom = 1.f / (triangle/8227 + noise/12241) + 100.f;
       float tnd_out = 159.79f / tnd_denom;
 
       return pulse_out + tnd_out;
@@ -886,6 +1032,7 @@ class apu
     pulse_channel pulse_0_;
     pulse_channel pulse_1_;
     triangle_channel triangle_;
+    noise_channel noise_;
     frame_counter frame_counter_;
 };
 

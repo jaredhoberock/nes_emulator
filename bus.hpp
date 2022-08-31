@@ -267,7 +267,28 @@ class bus
 
         apu_.set_triangle_length_counter_and_timer_high_bits(index, timer_bits);
       }
-      else if(0x400B < address and address < 0x4014)
+      else if(0x400C == address)
+      {
+        bool halt_length_counter   = (0b00100000 & value) != 0;
+        bool constant_volume       = (0b00010000 & value) != 0;
+        std::uint8_t volume_period = (0b00001111 & value);
+
+        apu_.set_noise_length_counter_halt_and_volume_envelope(halt_length_counter, constant_volume, volume_period);
+      }
+      else if(0x400E == address)
+      {
+        bool mode          = (0b10000000 & value) != 0;
+        std::uint8_t index = (0b00001111 & value);
+
+        apu_.set_noise_mode_and_timer_period(mode, index);
+      }
+      else if(0x400F == address)
+      {
+        std::uint8_t index = value >> 3;
+
+        apu_.set_noise_length_counter(index);
+      }
+      else if(0x400F < address and address < 0x4014)
       {
         // apu and i/o
       }
