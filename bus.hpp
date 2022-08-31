@@ -1,5 +1,6 @@
 #pragma once
 
+#include "apu.hpp"
 #include "cartridge.hpp"
 #include "ppu.hpp"
 #include <array>
@@ -18,6 +19,7 @@ class bus
     cartridge& cart_;
     std::span<uint8_t, 2048> wram_;
     ppu& ppu_;
+    apu& apu_;
     std::uint8_t dma_page_;
     std::uint8_t dma_address_;
     std::uint8_t dma_data_;
@@ -28,11 +30,13 @@ class bus
     bus(std::span<const std::uint8_t,2> controllers,
         cartridge& cart,
         std::span<std::uint8_t,2048> wram,
-        ppu& p)
+        ppu& p,
+        apu& a)
       : controllers_{controllers},
         cart_{cart},
         wram_{wram},
         ppu_{p},
+        apu_{a},
         dma_page_{},
         dma_address_{},
         dma_data_{},
@@ -116,9 +120,24 @@ class bus
           }
         }
       }
-      else if(0x4000 <= address and address < 0x4016)
+      else if(address == 0x4015)
       {
-        // apu and i/o
+        bool dmc_interrupt = false;
+        bool frame_interrupt = apu_.frame_interrupt_flag();
+        bool dmc_active = false;
+        bool noise_length_counter_status = false;
+        bool triangle_length_counter_status = false;
+        bool pulse_1_length_counter_status = apu_.pulse_1_length_counter_status();
+        bool pulse_0_length_counter_status = apu_.pulse_0_length_counter_status();
+
+        result = 0;
+        result |= (dmc_interrupt << 7);
+        result |= (frame_interrupt << 6);
+        result |= (dmc_active << 4);
+        result |= (noise_length_counter_status << 3);
+        result |= (triangle_length_counter_status << 2);
+        result |= (pulse_1_length_counter_status << 1);
+        result |= (pulse_0_length_counter_status << 0);
       }
       else if(0x4016 <= address and address < 0x4018)
       {
@@ -172,7 +191,65 @@ class bus
           }
         }
       }
-      else if(0x4000 <= address and address < 0x4014)
+      else if(0x4000 == address)
+      {
+        std::uint8_t duty_cycle = value >> 6;
+        bool loop_volume = (0b00100000 & value) != 0;
+        bool constant_volume = (0b00010000 & value) != 0;
+        std::uint8_t volume_period = 0b00001111 & value;
+
+        apu_.set_pulse_0_duty_cycle_and_volume_envelope(duty_cycle, loop_volume, constant_volume, volume_period);
+      }
+      else if(0x4001 == address)
+      {
+        bool enabled             = (0b10000000 & value) != 0;
+        std::uint8_t period      = (0b01110000 & value) >> 4;
+        bool negated             = (0b00001000 & value) != 0;
+        std::uint8_t shift_count =  0b00000111 & value;
+
+        apu_.set_pulse_0_sweep(enabled, period, negated, shift_count);
+      }
+      else if(0x4002 == address)
+      {
+        apu_.set_pulse_0_timer_low_bits(value);
+      }
+      else if(0x4003 == address)
+      {
+        std::uint8_t index = value >> 3;
+        std::uint8_t timer_bits = (0b00000111 & value);
+
+        apu_.set_pulse_0_length_counter_and_timer_high_bits(index, timer_bits);
+      }
+      else if(0x4004 == address)
+      {
+        std::uint8_t duty_cycle = value >> 6;
+        bool loop_volume = (0b00100000 & value) != 0;
+        bool constant_volume = (0b00010000 & value) != 0;
+        std::uint8_t volume_period = 0b00001111 & value;
+
+        apu_.set_pulse_1_duty_cycle_and_volume_envelope(duty_cycle, loop_volume, constant_volume, volume_period);
+      }
+      else if(0x4005 == address)
+      {
+        bool enabled             = (0b10000000 & value) != 0;
+        std::uint8_t period      = (0b01110000 & value) >> 4;
+        bool negated             = (0b00001000 & value) != 0;
+        std::uint8_t shift_count =  0b00000111 & value;
+
+        apu_.set_pulse_1_sweep(enabled, period, negated, shift_count);
+      }
+      else if(0x4006 == address)
+      {
+        apu_.set_pulse_1_timer_low_bits(value);
+      }
+      else if(0x4007 == address)
+      {
+        std::uint8_t index = value >> 3;
+        std::uint8_t timer_bits = (0b00000111 & value);
+
+        apu_.set_pulse_1_length_counter_and_timer_high_bits(index, timer_bits);
+      }
+      else if(0x4007 < address and address < 0x4014)
       {
         // apu and i/o
       }
@@ -186,11 +263,28 @@ class bus
       else if(0x4015 == address)
       {
         // sound channels enable
+        bool dmc_enabled      = (0b00010000 & value) != 0;
+        bool noise_enabled    = (0b00001000 & value) != 0;
+        bool triangle_enabled = (0b00000100 & value) != 0;
+        bool pulse_1_enabled  = (0b00000010 & value) != 0;
+        bool pulse_0_enabled  = (0b00000001 & value) != 0;
+
+        apu_.enable_channels(dmc_enabled, noise_enabled, triangle_enabled, pulse_1_enabled, pulse_0_enabled);
       }
-      else if(0x4016 <= address and address < 0x4018)
+      else if(0x4016 == address)
       {
-        // writing to these addresses captures the current controller state into the shift registers
-        controller_shift_registers_[address & 0x0001] = controllers_[address & 0x0001];
+        // writing to this address captures the current controller 0 state into the shift registers
+        // XXX OLC's code mapped address 0x4017 to this as well for some reason
+        //     we may need to more carefully emulate the controller ports
+        controller_shift_registers_[0] = controllers_[0];
+      }
+      else if(0x4017 == address)
+      {
+        // see https://www.nesdev.org/wiki/APU#Frame_Counter_($4017)
+        bool mode               = (value & 0b10000000) != 0;
+        bool inhibit_interrupts = (value & 0b01000000) != 0;
+
+        apu_.set_frame_counter_mode_and_interrupts(mode, inhibit_interrupts);
       }
       else if(0x4018 <= address and address < 0x4020)
       {

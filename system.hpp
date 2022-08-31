@@ -1,5 +1,6 @@
 #pragma once
 
+#include "apu.hpp"
 #include "bus.hpp"
 #include "cartridge.hpp"
 #include "graphics_bus.hpp"
@@ -30,7 +31,7 @@ class system
         controllers_{{}},
         wram_{{}},
         cart_{rom_filename},
-        bus_{controllers_, cart_, wram_, ppu_},
+        bus_{controllers_, cart_, wram_, ppu_, apu_},
         vram_{},
         graphics_bus_{cart_, vram_}
     {
@@ -66,6 +67,16 @@ class system
     inline class ppu& ppu()
     {
       return ppu_;
+    }
+
+    inline const apu& apu() const
+    {
+      return apu_;
+    }
+
+    inline class apu& apu()
+    {
+      return apu_;
     }
 
     inline class bus& bus()
@@ -161,6 +172,7 @@ class system
 
     mos6502 cpu_;
     class ppu ppu_;
+    class apu apu_;
     std::array<std::uint8_t,2> controllers_;
     std::array<std::uint8_t,2048> wram_;
     cartridge cart_;

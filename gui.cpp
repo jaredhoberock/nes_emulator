@@ -10,6 +10,7 @@
 #include "imgui_impl_opengl3.h"
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <fmt/format.h>
 #include <future>
 #include <iostream>
@@ -452,9 +453,10 @@ std::tuple<const char*, SDL_Window*, SDL_GLContext> create_window()
   // Setup SDL
   // (Some versions of SDL before <2.0.10 appears to have performance/stalling issues on a minority of Windows systems,
   // depending on whether SDL_INIT_GAMECONTROLLER is enabled or disabled.. updating to latest version of SDL is recommended!)
-  if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0)
+  // XXX since this initializes things unrelated to windowing, we might want to hoist this out of create_window
+  if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER | SDL_INIT_AUDIO) != 0)
   {
-    throw std::runtime_error(fmt::format("Error: {}", SDL_GetError()));
+    throw std::runtime_error(fmt::format("create_window: error after SDL_Init: {}", SDL_GetError()));
   }
   
   // GL 3.0 + GLSL 130
@@ -485,10 +487,63 @@ void destroy_window(SDL_Window* window, SDL_GLContext context)
   SDL_Quit();
 }
 
+SDL_AudioDeviceID create_audio()
+{
+  SDL_AudioSpec desired{};
+  SDL_AudioSpec obtained{};
+
+  //desired.freq = 44100;
+  desired.freq = 88200;
+  desired.format = AUDIO_F32;
+  desired.channels = 1;
+  desired.callback = nullptr;
+
+  SDL_AudioDeviceID result = SDL_OpenAudioDevice(nullptr, 0, &desired, &obtained, 0);
+  if(result == 0)
+  {
+    throw std::runtime_error(fmt::format("create_audio: Couldn't open audio device: {}", SDL_GetError()));
+  }
+
+  if(obtained.format != desired.format)
+  {
+    throw std::runtime_error("create_audio: Obtained undesired audio format");
+  }
+
+  // unpause the audio
+  SDL_PauseAudioDevice(result, 0);
+
+  return result;
+}
+
+void destroy_audio(SDL_AudioDeviceID audio)
+{
+  SDL_CloseAudioDevice(audio);
+}
+
+
+float square_wave(float frequency, float t)
+{
+  return 2.f * (2.f * std::floor(t * frequency) - std::floor(2.f * t * frequency)) + 1.f;
+}
+
+
+float sawtooth_wave(float frequency, float t)
+{
+  return 2.f * (t * frequency - std::floor(0.5f + t * frequency));
+}
+
+
+float pulse_wave(float frequency, float duty_cycle, float t)
+{
+  return sawtooth_wave(frequency, t) - sawtooth_wave(frequency, t + duty_cycle/frequency);
+}
+
 
 int gui(class system& sys)
 {
   auto [glsl_version, window, gl_context] = create_window();
+
+  SDL_AudioDeviceID audio = create_audio();
 
   // Setup Dear ImGui context
   IMGUI_CHECKVERSION();
@@ -558,7 +613,32 @@ int gui(class system& sys)
         emulation = std::async([&]
         {
           //emulate(sys, emulation_cancelled, emulation_paused, null_stream, std::cerr);
-          emulate(sys, emulation_cancelled, emulation_paused, std::cout, std::cerr);
+          //emulate(sys, emulation_cancelled, emulation_paused, std::cout, std::cerr);
+          emulate(sys, emulation_cancelled, emulation_paused, std::cout, std::cerr, [audio](float sample)
+          {
+            if(SDL_QueueAudio(audio, &sample, sizeof(float)))
+            {
+              throw std::runtime_error(fmt::format("gui: Error after SDL_QueueAudio: {}", SDL_GetError()));
+            }
+            //// XXX it's not clear if buffering here is helpful
+            //static std::vector<float> buffer;
+            //if(buffer.capacity() == 0)
+            //{
+            //  buffer.resize(512);
+            //}
+
+            //buffer.push_back(sample);
+
+            //if(buffer.size() == buffer.capacity())
+            //{
+            //  if(SDL_QueueAudio(audio, buffer.data(), sizeof(float) * buffer.size()))
+            //  {
+            //    throw std::runtime_error(fmt::format("gui: Error after SDL_QueueAudio: {}", SDL_GetError()));
+            //  }
+
+            //  buffer.clear();
+            //}
+          });
         });
       }
     }
@@ -615,6 +695,8 @@ int gui(class system& sys)
   {
     emulation.wait();
   }
+
+  destroy_audio(audio);
   
   // Cleanup
   ImGui_ImplOpenGL3_Shutdown();

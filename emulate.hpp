@@ -1,6 +1,8 @@
 #include "system.hpp"
+#include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <functional>
 #include <iostream>
 #include <thread>
 
@@ -63,13 +65,26 @@ inline void emulate(class system& sys)
 }
 
 
-inline void emulate(class system& sys, std::atomic<bool>& cancelled, std::atomic<bool>& paused, std::ostream& cpu_log, std::ostream& error_log)
+inline void emulate(class system& sys, std::atomic<bool>& cancelled, std::atomic<bool>& paused, std::ostream& cpu_log, std::ostream& error_log, std::function<void(float)> audio = [](float){})
 {
   // this approach steps the cpu one instruction and then steps the ppu 3
   // times as many cycles as the number of cpu cycles consumed
 
+  auto frame_began = std::chrono::high_resolution_clock::now();
+
+  float mean_audio_sample = 0;
+  std::size_t num_audio_samples = 0;
+  // XXX this corresponds to an audio sampling rate of 88200
+  std::array<std::size_t,4> samples_per_output = {20, 20, 20, 21};
+
   std::size_t ppu_cycle = 0;
   std::size_t cpu_cycle = sys.cpu().reset();
+
+  for(std::size_t i = 0; i < cpu_cycle; ++i)
+  {
+    sys.apu().step_cycle();
+  }
+
   for(std::size_t i = 0; i < 3 * cpu_cycle; ++i)
   {
     sys.ppu().step_cycle();
@@ -104,6 +119,32 @@ inline void emulate(class system& sys, std::atomic<bool>& cancelled, std::atomic
         {
           num_cpu_cycles += sys.cpu().nonmaskable_interrupt();
           sys.ppu().nmi = false;
+
+          auto frame_duration = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - frame_began);
+
+          if(frame_duration < std::chrono::microseconds(16667))
+          {
+            std::this_thread::sleep_for(std::chrono::microseconds(16667) - frame_duration);
+          }
+
+          frame_began = std::chrono::high_resolution_clock::now();
+        }
+      }
+
+      // let the apu catch up to the cpu
+      for(std::size_t i = 0; i < num_cpu_cycles; ++i)
+      {
+        sys.apu().step_cycle();
+        ++num_audio_samples;
+        mean_audio_sample += (sys.apu().sample() - mean_audio_sample)/num_audio_samples;
+
+        // output an audio sample every so often
+        if(num_audio_samples == samples_per_output.front())
+        {
+          audio(mean_audio_sample);
+          mean_audio_sample = 0;
+          num_audio_samples = 0;
+          std::rotate(samples_per_output.begin(), samples_per_output.begin() + 1, samples_per_output.end());
         }
       }
 
