@@ -1,4 +1,4 @@
-nes: bus.hpp cartridge.hpp main.cpp mos6502.hpp ppu.hpp ppu_renderer.hpp ppu_renderer.cpp system.hpp
+nes: bus.hpp cartridge.hpp cpu.hpp main.cpp ppu.hpp ppu_renderer.hpp ppu_renderer.cpp system.hpp
 	clang -std=c++20 -Wall -Wextra main.cpp ppu_renderer.cpp -lstdc++ -lfmt -o $@
 
 headless: *.hpp *.cpp Makefile

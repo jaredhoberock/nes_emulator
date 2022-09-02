@@ -3,8 +3,8 @@
 #include "apu.hpp"
 #include "bus.hpp"
 #include "cartridge.hpp"
+#include "cpu.hpp"
 #include "graphics_bus.hpp"
-#include "mos6502.hpp"
 #include "ppu.hpp"
 #include <array>
 #include <span>
@@ -49,12 +49,12 @@ class system
       controllers_[idx] = state;
     }
 
-    inline mos6502& cpu()
+    inline class cpu& cpu()
     {
       return cpu_;
     }
 
-    inline const mos6502& cpu() const
+    inline const class cpu& cpu() const
     {
       return cpu_;
     }
@@ -170,7 +170,7 @@ class system
   private:
     std::array<ppu::rgb, framebuffer_width * framebuffer_height> framebuffer_;
 
-    mos6502 cpu_;
+    class cpu cpu_;
     class ppu ppu_;
     class apu apu_;
     std::array<std::uint8_t,2> controllers_;
