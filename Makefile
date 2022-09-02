@@ -1,8 +1,5 @@
-nes: bus.hpp cartridge.hpp cpu.hpp main.cpp ppu.hpp ppu_renderer.hpp ppu_renderer.cpp system.hpp
-	clang -std=c++20 -Wall -Wextra main.cpp ppu_renderer.cpp -lstdc++ -lfmt -o $@
-
-headless: *.hpp *.cpp Makefile
-	clang -std=c++20 -Wall -Wextra -g headless.cpp ppu_renderer.cpp -lstdc++ -lfmt -o $@
+headless: nes/bus.hpp nes/cartridge.hpp nes/cpu.hpp nes/ppu.hpp nes/ppu_renderer.hpp nes/ppu_renderer.cpp nes/system.hpp main.cpp 
+	clang -std=c++20 -Wall -Wextra -g headless.cpp nes/ppu_renderer.cpp -lstdc++ -lfmt -o $@
 
 nestest: *.hpp *.cpp Makefile
 	clang -std=c++20 -Wall -Wextra -g nestest.cpp -lstdc++ -lfmt -o $@
@@ -22,11 +19,11 @@ IMGUI_LIBS = `sdl2-config --libs` -lGL -ldl -lm
 %.o:%.cpp *.hpp
 	clang -std=c++20 -Wall -Wextra -O3 -c -o $@ $<
 
-gui.o:gui.cpp gui.hpp *.hpp
+gui.o:gui.cpp gui.hpp nes/*.hpp
 	clang -std=c++20 -Wall -Wextra $(IMGUI_CFLAGS) -O3 -c -o $@ $<
 
-app:app.o gui.o ppu_renderer.o $(IMGUI_OBJS)
+app:app.o gui.o nes/ppu_renderer.o $(IMGUI_OBJS)
 	clang -o $@ $^ $(IMGUI_LIBS) -lstdc++ -lfmt -lpthread
 
 clean:
-	rm -rf *.o nes app headless nestest
+	rm -rf *.o app headless nestest

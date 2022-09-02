@@ -1,5 +1,5 @@
-#include "emulate.hpp"
-#include "system.hpp"
+#include "nes/emulate.hpp"
+#include "nes/system.hpp"
 #include <fmt/format.h>
 
 
@@ -12,11 +12,10 @@ int main(int argc, const char** argv)
   }
 
   // create a system
-  // XXX i can't use the word system on its own?
-  class system sys{argv[1]};
+  nes::system sys{argv[1]};
 
-  //sys.bus().write(mos6502::reset_vector_location + 0, 0x00);
-  //sys.bus().write(mos6502::reset_vector_location + 1, 0xC0);
+  //sys.bus().write(cpu::reset_vector_location + 0, 0x00);
+  //sys.bus().write(cpu::reset_vector_location + 1, 0xC0);
 
   try
   {

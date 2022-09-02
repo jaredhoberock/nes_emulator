@@ -1,7 +1,7 @@
 #pragma once
 
-#include "system.hpp"
+#include "nes/system.hpp"
 
 // this function should be called from main to start the GUI
-int gui(class system& sys);
+int gui(nes::system& sys);
 

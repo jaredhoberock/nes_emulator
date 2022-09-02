@@ -3,11 +3,11 @@
 // If you are new to Dear ImGui, read documentation from the docs/ folder + read the top of imgui.cpp.
 // Read online: https://github.com/ocornut/imgui/tree/master/docs
 
-#include "emulate.hpp"
 #include "gui.hpp"
 #include "imgui.h"
 #include "imgui_impl_sdl.h"
 #include "imgui_impl_opengl3.h"
+#include "nes/emulate.hpp"
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -45,48 +45,48 @@ bool is_complete(std::future<void>& f)
 }
 
 
-void update_controller_state(class system& sys)
+void update_controller_state(nes::system& sys)
 {
   std::uint8_t controller_zero_state = 0;
 
   if(ImGui::IsKeyPressed(SDL_SCANCODE_X))
   {
-    controller_zero_state |= system::a_button_bitmask;
+    controller_zero_state |= nes::system::a_button_bitmask;
   }
 
   if(ImGui::IsKeyPressed(SDL_SCANCODE_Z))
   {
-    controller_zero_state |= system::b_button_bitmask;
+    controller_zero_state |= nes::system::b_button_bitmask;
   }
 
   if(ImGui::IsKeyPressed(SDL_SCANCODE_RSHIFT))
   {
-    controller_zero_state |= system::select_button_bitmask;
+    controller_zero_state |= nes::system::select_button_bitmask;
   }
 
   if(ImGui::IsKeyPressed(SDL_SCANCODE_RETURN))
   {
-    controller_zero_state |= system::start_button_bitmask;
+    controller_zero_state |= nes::system::start_button_bitmask;
   }
 
   if(ImGui::IsKeyPressed(SDL_SCANCODE_UP))
   {
-    controller_zero_state |= system::up_button_bitmask;
+    controller_zero_state |= nes::system::up_button_bitmask;
   }
 
   if(ImGui::IsKeyPressed(SDL_SCANCODE_DOWN))
   {
-    controller_zero_state |= system::down_button_bitmask;
+    controller_zero_state |= nes::system::down_button_bitmask;
   }
 
   if(ImGui::IsKeyPressed(SDL_SCANCODE_LEFT))
   {
-    controller_zero_state |= system::left_button_bitmask;
+    controller_zero_state |= nes::system::left_button_bitmask;
   }
 
   if(ImGui::IsKeyPressed(SDL_SCANCODE_RIGHT))
   {
-    controller_zero_state |= system::right_button_bitmask;
+    controller_zero_state |= nes::system::right_button_bitmask;
   }
 
   sys.set_controller(0, controller_zero_state);
@@ -99,11 +99,11 @@ class disassembly_window
     std::map<std::uint16_t, std::string> disassembly_;
 
   public:
-    disassembly_window(const class system& sys)
+    disassembly_window(const nes::system& sys)
       : disassembly_(sys.cpu().disassemble_program())
     {}
 
-    void draw(const class system& sys)
+    void draw(const nes::system& sys)
     {
       ImGui::Begin("Disassembly");
       std::uint16_t focal_address = sys.cpu().program_counter();
@@ -147,7 +147,7 @@ class disassembly_window
 };
 
 
-void draw_zero_page(const class system& sys)
+void draw_zero_page(const nes::system& sys)
 {
   std::span zp = sys.zero_page();
 
@@ -161,7 +161,7 @@ void draw_zero_page(const class system& sys)
   ImGui::End();
 }
 
-void draw_nametable(const class system& sys, int which)
+void draw_nametable(const nes::system& sys, int which)
 {
   std::span nt = sys.nametable(which);
 
@@ -182,7 +182,7 @@ void draw_nametable(const class system& sys, int which)
 }
 
 
-void draw_object_attributes(const class system& sys)
+void draw_object_attributes(const nes::system& sys)
 {
   std::span attributes = sys.object_attributes();
 
@@ -232,7 +232,7 @@ class palettes_window
       glDeleteTextures(2, textures_.data());
     }
 
-    std::optional<int> draw(const class system& sys) const
+    std::optional<int> draw(const nes::system& sys) const
     {
       // copy the current state of the palettes into our textures
       for(size_t i = 0; i < textures_.size(); ++i)
@@ -272,8 +272,8 @@ class palettes_window
 class pattern_tables_window
 {
   private:
-    const int width_  = system::pattern_table_dim;
-    const int height_ = system::pattern_table_dim;
+    const int width_  = nes::system::pattern_table_dim;
+    const int height_ = nes::system::pattern_table_dim;
     const ImGuiWindowFlags window_flags_ = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_AlwaysAutoResize;
     std::array<GLuint,2> textures_;
 
@@ -305,7 +305,7 @@ class pattern_tables_window
       glDeleteTextures(2, textures_.data());
     }
 
-    void draw(const class system& sys, int selected_palette) const
+    void draw(const nes::system& sys, int selected_palette) const
     {
       // copy the current state of the framebuffer into our texture
       for(int i = 0; i < 2; ++i)
@@ -334,8 +334,8 @@ class pattern_tables_window
 class framebuffer_window
 {
   private:
-    const int width_ = ppu::framebuffer_width;
-    const int height_ = ppu::framebuffer_height;
+    const int width_  = nes::ppu::framebuffer_width;
+    const int height_ = nes::ppu::framebuffer_height;
     const ImGuiWindowFlags window_flags_ = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_AlwaysAutoResize;
     GLuint texture_;
 
@@ -364,7 +364,7 @@ class framebuffer_window
       glDeleteTextures(1, &texture_);
     }
 
-    void draw(const class system& sys) const
+    void draw(const nes::system& sys) const
     {
       // copy the current state of the framebuffer into our texture
       glBindTexture(GL_TEXTURE_2D, texture_);
@@ -539,7 +539,7 @@ float pulse_wave(float frequency, float duty_cycle, float t)
 }
 
 
-int gui(class system& sys)
+int gui(nes::system& sys)
 {
   auto [glsl_version, window, gl_context] = create_window();
 

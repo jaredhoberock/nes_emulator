@@ -2,6 +2,10 @@
 
 #include <array>
 
+namespace nes
+{
+
+
 template<class T, std::size_t N>
 class bounded_array
 {
@@ -46,4 +50,7 @@ class bounded_array
     std::array<T,N> elements_;
     std::size_t size_;
 };
+
+
+} // end nes
 

@@ -7,6 +7,10 @@
 #include <thread>
 
 
+namespace nes
+{
+
+
 inline void emulate(class system& sys)
 {
   // this approach steps the cpu one instruction and then steps the ppu 3
@@ -163,4 +167,7 @@ inline void emulate(class system& sys, std::atomic<bool>& cancelled, std::atomic
     error_log << "emulate: Caught exception: " << e.what() << std::endl;
   }
 }
+
+
+} // end nes
 

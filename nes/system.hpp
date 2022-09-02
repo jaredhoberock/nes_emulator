@@ -9,6 +9,11 @@
 #include <array>
 #include <span>
 
+
+namespace nes
+{
+
+
 class system
 {
   public:
@@ -49,12 +54,12 @@ class system
       controllers_[idx] = state;
     }
 
-    inline class cpu& cpu()
+    inline nes::cpu& cpu()
     {
       return cpu_;
     }
 
-    inline const class cpu& cpu() const
+    inline const nes::cpu& cpu() const
     {
       return cpu_;
     }
@@ -64,7 +69,7 @@ class system
       return ppu_;
     }
 
-    inline class ppu& ppu()
+    inline nes::ppu& ppu()
     {
       return ppu_;
     }
@@ -74,22 +79,22 @@ class system
       return apu_;
     }
 
-    inline class apu& apu()
+    inline nes::apu& apu()
     {
       return apu_;
     }
 
-    inline class bus& bus()
+    inline nes::bus& bus()
     {
       return bus_;
     }
 
-    inline const class bus& bus() const
+    inline const nes::bus& bus() const
     {
       return bus_;
     }
 
-    inline const class graphics_bus& graphics_bus() const
+    inline const nes::graphics_bus& graphics_bus() const
     {
       return graphics_bus_;
     }
@@ -170,14 +175,17 @@ class system
   private:
     std::array<ppu::rgb, framebuffer_width * framebuffer_height> framebuffer_;
 
-    class cpu cpu_;
-    class ppu ppu_;
-    class apu apu_;
+    nes::cpu cpu_;
+    nes::ppu ppu_;
+    nes::apu apu_;
     std::array<std::uint8_t,2> controllers_;
     std::array<std::uint8_t,2048> wram_;
     cartridge cart_;
-    class bus bus_;
+    nes::bus bus_;
     std::array<std::uint8_t, 2*nametable_size> vram_;
-    class graphics_bus graphics_bus_;
+    nes::graphics_bus graphics_bus_;
 };
+
+
+} // end nes
 

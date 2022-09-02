@@ -6,6 +6,11 @@
 #include <span>
 #include <stdexcept>
 
+
+namespace nes
+{
+
+
 class graphics_bus
 {
   private:
@@ -82,4 +87,7 @@ class graphics_bus
       }
     }
 };
+
+
+} // end nes
 

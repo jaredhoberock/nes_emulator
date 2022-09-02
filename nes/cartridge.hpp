@@ -8,6 +8,10 @@
 #include <vector>
 
 
+namespace nes
+{
+
+
 class nrom
 {
   private:
@@ -200,4 +204,7 @@ class cartridge
 
     nrom mapper_;
 };
+
+
+} // end nes
 

@@ -11,6 +11,10 @@
 #include <stdexcept>
 
 
+namespace nes
+{
+
+
 class bus
 {
   private:
@@ -340,4 +344,7 @@ class bus
       }
     }
 };
+
+
+} // end nes
 

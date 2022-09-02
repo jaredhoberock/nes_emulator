@@ -4,6 +4,10 @@
 #include <cstdint>
 
 
+namespace nes
+{
+
+
 class divider
 {
   public:
@@ -1035,4 +1039,7 @@ class apu
     noise_channel noise_;
     frame_counter frame_counter_;
 };
+
+
+} // end nes
 

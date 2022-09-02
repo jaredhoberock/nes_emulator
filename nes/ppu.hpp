@@ -7,6 +7,11 @@
 #include <cstdint>
 #include <optional>
 
+
+namespace nes
+{
+
+
 class ppu
 {
   public:
@@ -265,4 +270,7 @@ class ppu
     ppu_renderer::loopy_register tram_address_;
     std::uint8_t fine_x_;
 };
+
+
+} // end nes
 

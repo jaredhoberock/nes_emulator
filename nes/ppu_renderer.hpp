@@ -7,6 +7,11 @@
 #include <cstdint>
 #include <span>
 
+
+namespace nes
+{
+
+
 // ppu_render implements the PPU's rendering algorithm
 class ppu_renderer
 {
@@ -601,4 +606,7 @@ class ppu_renderer
       return result;
     }
 };
+
+
+} // end nes
 

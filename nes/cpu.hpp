@@ -12,6 +12,10 @@
 #include <string>
 
 
+namespace nes
+{
+
+
 enum operation
 {
   // legal instructions
@@ -2379,4 +2383,7 @@ class cpu
       return instruction_info_table[opcode].op < DCP;
     }
 };
+
+
+} // end nes
 

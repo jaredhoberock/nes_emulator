@@ -2,6 +2,10 @@
 #include <cassert>
 
 
+namespace nes
+{
+
+
 // see https://www.nesdev.org/wiki/PPU_rendering
 // and https://www.nesdev.org/wiki/File:Ntsc_timing.png
 bool ppu_renderer::step_cycle(bool show_background, bool show_sprites,
@@ -180,4 +184,7 @@ bool ppu_renderer::step_cycle(bool show_background, bool show_sprites,
 
   return entered_vertical_blank_period;
 }
+
+
+} // end nes
 
